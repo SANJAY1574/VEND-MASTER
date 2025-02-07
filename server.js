@@ -19,7 +19,7 @@ const razorpay = new Razorpay({
 
 // ✅ Function to Generate QR Code for UPI Payment
 const generateQRCode = (upiLink) => {
-    return https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)};
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
 };
 
 // ✅ Create Order & Generate UPI Payment Link
@@ -35,15 +35,15 @@ app.post("/create-order", async (req, res) => {
         const options = {
             amount: amount * 100, // Razorpay requires amount in paise
             currency: "INR",
-            receipt: order_${Date.now()},
+            receipt: "order_" + Date.now(),
             payment_capture: 1, // Auto capture
         };
         const order = await razorpay.orders.create(options);
 
         // ✅ Generate UPI Payment Link
-        const upiPaymentLink = upi://pay?pa=vprabhasivashankarsk-1@oksbi&pn=${encodeURIComponent(
+        const upiPaymentLink = `upi://pay?pa=vprabhasivashankarsk-1@oksbi&pn=${encodeURIComponent(
             "VEND MASTER"
-        )}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR;
+        )}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
 
         // ✅ Generate QR Code for UPI Payment
         const qrCodeURL = generateQRCode(upiPaymentLink);
@@ -71,12 +71,15 @@ app.post("/verify-payment", async (req, res) => {
         }
 
         // ✅ Fetch payment details from Razorpay
-        const paymentDetails = await axios.get(https://api.razorpay.com/v1/orders/${razorpay_order_id}/payments, {
-            auth: {
-                username: process.env.RAZORPAY_KEY_ID,
-                password: process.env.RAZORPAY_SECRET_KEY,
-            },
-        });
+        const paymentDetails = await axios.get(
+            `https://api.razorpay.com/v1/orders/${razorpay_order_id}/payments`,
+            {
+                auth: {
+                    username: process.env.RAZORPAY_KEY_ID,
+                    password: process.env.RAZORPAY_SECRET_KEY,
+                },
+            }
+        );
 
         // ✅ Extract Payment ID and Status
         const payments = paymentDetails.data.items;
@@ -122,12 +125,15 @@ app.get("/payment-status", async (req, res) => {
         }
 
         // ✅ Fetch payment details from Razorpay
-        const response = await axios.get(https://api.razorpay.com/v1/payments/${payment_id}, {
-            auth: {
-                username: process.env.RAZORPAY_KEY_ID,
-                password: process.env.RAZORPAY_SECRET_KEY,
-            },
-        });
+        const response = await axios.get(
+            `https://api.razorpay.com/v1/payments/${payment_id}`,
+            {
+                auth: {
+                    username: process.env.RAZORPAY_KEY_ID,
+                    password: process.env.RAZORPAY_SECRET_KEY,
+                },
+            }
+        );
 
         const status = response.data.status;
 
@@ -147,6 +153,7 @@ app.post("/webhook", async (req, res) => {
     try {
         const payload = req.body;
         const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+        const signature = req.headers["x-razorpay-signature"];
 
         // ✅ Generate Expected Signature
         const generatedSignature = crypto
@@ -154,14 +161,12 @@ app.post("/webhook", async (req, res) => {
             .update(JSON.stringify(payload))
             .digest("hex");
 
-        const signature = req.headers["x-razorpay-signature"];
-
         if (signature !== generatedSignature) {
             return res.status(400).json({ error: "Invalid signature" });
         }
 
         if (payload.event === "payment.captured") {
-            console.log(✅ Payment captured: ${payload.payload.payment.entity.id});
+            console.log(`✅ Payment captured: ${payload.payload.payment.entity.id}`);
             return res.json({ status: "success" });
         }
 
