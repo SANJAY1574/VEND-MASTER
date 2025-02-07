@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Page</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+    <script type="text/javascript">
+        // Configuration for Razorpay Checkout
+        var options = {
+            "key": "rzp_test_nVQQ9VKK3TAT1O", // Replace with your Razorpay Key ID
+            "order_id": new URLSearchParams(window.location.search).get("order_id"), // Get the order_id from URL
+            "handler": function (response) {
+                alert("Payment Successful! Payment ID: " + response.razorpay_payment_id);
+                // Additional success actions, such as sending the payment info to your server
+            },
+            "prefill": {
+                "name": "Test User", // Optional: Pre-fill user info
+                "email": "user@example.com", 
+                "contact": "9999999999"
+            },
+            "theme": {
+                "color": "#F37254" // Optional: Customize Razorpay checkout button color
+            }
+        };
+
+        // Initialize Razorpay checkout
+        var rzp1 = new Razorpay(options);
+        rzp1.open(); // Open the Razorpay payment portal
+    </script>
+</body>
+</html>
