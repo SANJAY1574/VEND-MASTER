@@ -31,7 +31,7 @@ app.post("/create-order", async (req, res) => {
         const order = await razorpay.orders.create(options);
 
         // ✅ Generate UPI Payment Link
-        const upiPaymentLink = `upi://pay?pa=vprabhasivashankarsk-1@oksbi&pn=YourBusinessName&tid=${order.id}&tr=${order.id}&tn=Order Payment&am=${amount}&cu=INR`;
+        const upiPaymentLink = `upi://pay?pa=vprabhasivashankarsk-1@oksbi&pn=${encodeURIComponent("YourBusinessName")}&tn=${encodeURIComponent("Order Payment")}&am=${amount}&cu=INR`;
 
         // ✅ Send order details & UPI link
         res.json({ order_id: order.id, upiPaymentLink });
