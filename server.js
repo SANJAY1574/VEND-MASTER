@@ -137,7 +137,6 @@ app.post("/webhook", asyncHandler(async (req, res) => {
     if (payload.event === "payment.captured") {
         const paymentId = payload.payload.payment.entity.id;
         console.log(`✅ Payment Captured via Webhook: ${paymentId}`);
-        // Here, you can mark the payment as successful in your system
         return res.json({ status: "success" });
     }
 
