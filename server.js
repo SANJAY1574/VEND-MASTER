@@ -42,6 +42,7 @@ app.post("/create-order", asyncHandler(async (req, res) => {
         receipt: "order_" + Date.now(),
         payment_capture: 1, // Auto capture
     };
+
     const order = await razorpay.orders.create(options);
 
     // ✅ Generate UPI Payment Link
@@ -65,17 +66,27 @@ app.post("/create-order", asyncHandler(async (req, res) => {
 
 // ✅ Verify and Capture Payment
 app.post("/verify-payment", asyncHandler(async (req, res) => {
-    const { razorpay_order_id } = req.body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-    if (!razorpay_order_id) {
-        return res.status(400).json({ error: "Order ID is required" });
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        return res.status(400).json({ error: "Missing payment details" });
+    }
+
+    // ✅ Verify payment signature
+    const generatedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_SECRET_KEY)
+        .update(razorpay_order_id + "|" + razorpay_payment_id)
+        .digest("hex");
+
+    if (generatedSignature !== razorpay_signature) {
+        return res.status(400).json({ error: "Invalid payment signature" });
     }
 
     // ✅ Fetch payment details from Razorpay
-    console.log(`🔍 Checking payments for Order ID: ${razorpay_order_id}`);
+    console.log(`🔍 Checking payment details for Payment ID: ${razorpay_payment_id}`);
 
     const paymentDetails = await axios.get(
-        `https://api.razorpay.com/v1/orders/${razorpay_order_id}/payments`,
+        `https://api.razorpay.com/v1/payments/${razorpay_payment_id}`,
         {
             auth: {
                 username: process.env.RAZORPAY_KEY_ID,
@@ -86,51 +97,15 @@ app.post("/verify-payment", asyncHandler(async (req, res) => {
 
     console.log("📝 Payment Details Response:", paymentDetails.data);
 
-    const payments = paymentDetails.data.items;
-
-    if (!payments || payments.length === 0) {
-        return res.json({
-            success: false,
-            status: "No Payment Found",
-            message: "No payment detected for this order",
-        });
-    }
-
-    // ✅ Get the latest payment
-    const payment = payments[payments.length - 1];
+    const payment = paymentDetails.data;
     const paymentStatus = payment.status;
-    const paymentId = payment.id;
-    const paymentAmount = payment.amount; // Already in paise
-
-    console.log(`🔍 Payment Status: ${paymentStatus}, Payment ID: ${paymentId}`);
 
     if (paymentStatus === "captured") {
         return res.json({
             success: true,
             status: "Success",
             message: "Payment Captured Successfully!",
-            payment_id: paymentId,
-        });
-    } else if (paymentStatus === "authorized") {
-        // ✅ Capture Payment Manually
-        await axios.post(
-            `https://api.razorpay.com/v1/payments/${paymentId}/capture`,
-            { amount: paymentAmount, currency: "INR" },
-            {
-                auth: {
-                    username: process.env.RAZORPAY_KEY_ID,
-                    password: process.env.RAZORPAY_SECRET_KEY,
-                },
-            }
-        );
-
-        console.log(`✅ Payment Captured: ${paymentId}`);
-
-        return res.json({
-            success: true,
-            status: "captured",
-            message: "Payment Captured Successfully!",
-            payment_id: paymentId,
+            payment_id: razorpay_payment_id,
         });
     } else {
         return res.json({
