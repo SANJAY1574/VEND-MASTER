@@ -1,4 +1,4 @@
-rrequire("dotenv").config();
+require("dotenv").config();
 const express = require("express");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
