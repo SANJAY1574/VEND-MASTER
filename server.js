@@ -46,9 +46,7 @@ app.post("/create-order", asyncHandler(async (req, res) => {
     const order = await razorpay.orders.create(options);
 
     // ✅ Generate UPI Payment Link
-    const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent(
-        "VEND MASTER"
-    )}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
+    const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent("VEND MASTER")}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
 
     // ✅ Generate QR Code for UPI Payment
     const qrCodeURL = generateQRCode(upiPaymentLink);
@@ -64,7 +62,7 @@ app.post("/create-order", asyncHandler(async (req, res) => {
     });
 }));
 
-// ✅ Verify and Capture Payment
+// ✅ Verify and Capture Payment (On-Demand Verification)
 app.post("/verify-payment", asyncHandler(async (req, res) => {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
