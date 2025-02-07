@@ -17,9 +17,9 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
-// ✅ Helper function to generate QR code
-const generateQRCode = (upiLink) => {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
+// ✅ Helper function to generate QR code for Razorpay Checkout
+const generateQRCode = (paymentLink) => {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(paymentLink)}`;
 };
 
 // ✅ Async error handler middleware
@@ -27,7 +27,7 @@ const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-// ✅ Create Order & Generate UPI Payment Link
+// ✅ Create Order & Generate Razorpay Payment Link
 app.post("/create-order", asyncHandler(async (req, res) => {
     const { amount } = req.body;
 
@@ -45,19 +45,19 @@ app.post("/create-order", asyncHandler(async (req, res) => {
 
     const order = await razorpay.orders.create(options);
 
-    // ✅ Generate UPI Payment Link
-    const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent("VEND MASTER")}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
+    // ✅ Generate Razorpay Payment URL (Checkout Link)
+    const paymentLink = `https://checkout.razorpay.com/v1/checkout.js?order_id=${order.id}`;
 
-    // ✅ Generate QR Code for UPI Payment
-    const qrCodeURL = generateQRCode(upiPaymentLink);
+    // ✅ Generate QR Code for Razorpay Payment Link
+    const qrCodeURL = generateQRCode(paymentLink);
 
     console.log(`✅ Order Created: ${order.id}`);
 
-    // ✅ Send order details, UPI link & QR code
+    // ✅ Send order details & QR code
     res.json({
         success: true,
         order_id: order.id,
-        upiPaymentLink,
+        paymentLink,
         qrCodeURL,
     });
 }));
