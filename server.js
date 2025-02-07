@@ -33,7 +33,7 @@ app.post("/create-order", async (req, res) => {
 
         // ✅ Create Razorpay Order
         const options = {
-            amount: amount * 100, // Razorpay requires amount in paise
+            amount: amount * 100, // Amount in paise
             currency: "INR",
             receipt: "order_" + Date.now(),
             payment_capture: 1, // Auto capture
@@ -48,6 +48,8 @@ app.post("/create-order", async (req, res) => {
         // ✅ Generate QR Code for UPI Payment
         const qrCodeURL = generateQRCode(upiPaymentLink);
 
+        console.log(`✅ Order Created: ${order.id}`);
+
         // ✅ Send order details, UPI link & QR code
         res.json({
             success: true,
@@ -56,12 +58,12 @@ app.post("/create-order", async (req, res) => {
             qrCodeURL,
         });
     } catch (error) {
-        console.error("Error creating order:", error);
+        console.error("❌ Error creating order:", error);
         res.status(500).json({ error: "Failed to create order" });
     }
 });
 
-// ✅ Verify Payment After Transaction
+// ✅ Verify and Capture Payment
 app.post("/verify-payment", async (req, res) => {
     try {
         const { razorpay_order_id } = req.body;
@@ -97,11 +99,13 @@ app.post("/verify-payment", async (req, res) => {
         const paymentId = payment.id;
         const paymentAmount = payment.amount; // Already in paise
 
+        console.log(`🔍 Payment Status: ${paymentStatus}, Payment ID: ${paymentId}`);
+
         if (paymentStatus === "captured") {
             return res.json({
                 success: true,
                 status: "Success",
-                message: "Payment Successful!",
+                message: "Payment Captured Successfully!",
                 payment_id: paymentId,
             });
         } else if (paymentStatus === "authorized") {
@@ -117,6 +121,8 @@ app.post("/verify-payment", async (req, res) => {
                 }
             );
 
+            console.log(`✅ Payment Captured: ${paymentId}`);
+
             return res.json({
                 success: true,
                 status: "captured",
@@ -131,44 +137,10 @@ app.post("/verify-payment", async (req, res) => {
             });
         }
     } catch (error) {
-        console.error("Error verifying payment:", error.response?.data || error.toString());
+        console.error("❌ Error verifying payment:", error.response?.data || error);
         res.status(500).json({ error: "Payment verification error" });
     }
 });
-
-// ✅ Check Payment Status
-app.get("/payment-status", async (req, res) => {
-    try {
-        const { payment_id } = req.query;
-
-        if (!payment_id) {
-            return res.status(400).json({ error: "Missing payment_id" });
-        }
-
-        // ✅ Fetch payment details
-        const response = await axios.get(
-            `https://api.razorpay.com/v1/payments/${payment_id}`,
-            {
-                auth: {
-                    username: process.env.RAZORPAY_KEY_ID,
-                    password: process.env.RAZORPAY_SECRET_KEY,
-                },
-            }
-        );
-
-        const status = response.data.status;
-
-        if (status === "captured") {
-            return res.json({ success: true, status: "paid" });
-        } else {
-            return res.json({ success: false, status });
-        }
-    } catch (error) {
-        console.error("Error fetching payment status:", error.response?.data || error.toString());
-        res.status(500).json({ error: "Failed to fetch payment status" });
-    }
-});
-
 
 // ✅ Webhook for Automatic Payment Capture
 app.post("/webhook", async (req, res) => {
@@ -184,19 +156,21 @@ app.post("/webhook", async (req, res) => {
             .digest("hex");
 
         if (signature !== generatedSignature) {
+            console.warn("❌ Invalid Webhook Signature");
             return res.status(400).json({ error: "Invalid signature" });
         }
 
         if (payload.event === "payment.captured") {
-            console.log(`✅ Payment captured: ${payload.payload.payment.entity.id}`);
+            console.log(`✅ Payment Captured via Webhook: ${payload.payload.payment.entity.id}`);
             return res.json({ status: "success" });
         }
 
         res.status(400).json({ error: "Unhandled webhook event" });
     } catch (error) {
-        console.error("Webhook error:", error);
+        console.error("❌ Webhook error:", error);
         res.status(500).json({ error: "Webhook processing failed" });
     }
 });
+
 // ✅ Start Server
-app.listen(5000, () => console.log("🚀 Server running on port 5000")); 
+app.listen(5000, () => console.log("🚀 Server running on port 5000"));
