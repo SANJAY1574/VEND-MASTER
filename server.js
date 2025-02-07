@@ -17,6 +17,9 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
+// Check if Razorpay instance is initialized correctly
+console.log("Razorpay Initialized:", razorpay); // Log Razorpay instance for debugging
+
 // ✅ Helper function to generate QR code for the payment link
 const generateQRCode = (upiLink) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
@@ -27,7 +30,6 @@ const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-// ✅ Create Order & Generate UPI Payment Link (Razorpay)
 // ✅ Create Order & Generate UPI Payment Link (Razorpay)
 app.post("/create-order", asyncHandler(async (req, res) => {
     const { amount } = req.body;
@@ -43,6 +45,11 @@ app.post("/create-order", asyncHandler(async (req, res) => {
         receipt: "order_" + Date.now(),
         payment_capture: 1, // Auto capture
     };
+
+    // Check if orders API is available
+    if (!razorpay.orders) {
+        return res.status(500).json({ error: "Razorpay orders API not available" });
+    }
 
     const order = await razorpay.orders.create(options);
 
@@ -68,7 +75,6 @@ app.post("/create-order", asyncHandler(async (req, res) => {
     // ✅ Generate UPI Payment Link
     const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=Vending%20Machine&tn=Vending%20Machine%20Payment&am=${amount}&cu=INR`;
 
-
     console.log(`✅ Order Created: ${order.id}`);
     console.log(`✅ Payment Link Created: ${paymentLink.short_url}`);
 
@@ -81,7 +87,6 @@ app.post("/create-order", asyncHandler(async (req, res) => {
         qrCodeURL,
     });
 }));
-
 
 // ✅ Verify and Capture Payment
 app.post("/verify-payment", asyncHandler(async (req, res) => {
