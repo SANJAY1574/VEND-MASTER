@@ -1,4 +1,4 @@
-require("dotenv").config();
+rrequire("dotenv").config();
 const express = require("express");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
@@ -64,7 +64,7 @@ app.post("/create-order", async (req, res) => {
 // ✅ Verify Payment After Transaction
 app.post("/verify-payment", async (req, res) => {
     try {
-        const { razorpay_order_id } = req.body; // Only using order_id for verification
+        const { razorpay_order_id } = req.body;
 
         if (!razorpay_order_id) {
             return res.status(400).json({ error: "Order ID is required" });
@@ -81,18 +81,38 @@ app.post("/verify-payment", async (req, res) => {
             }
         );
 
-        // ✅ Extract Payment ID and Status
         const payments = paymentDetails.data.items;
         if (payments.length > 0) {
-            const payment = payments[0]; // Get the first successful payment
+            // ✅ Get the latest payment
+            const payment = payments[payments.length - 1];
             const paymentStatus = payment.status;
             const paymentId = payment.id;
+            const paymentAmount = payment.amount;
 
             if (paymentStatus === "captured") {
                 return res.json({
                     success: true,
                     status: "Success",
                     message: "Payment Successful!",
+                    payment_id: paymentId,
+                });
+            } else if (paymentStatus === "authorized") {
+                // ✅ Capture Payment Manually
+                await axios.post(
+                    `https://api.razorpay.com/v1/payments/${paymentId}/capture`,
+                    { amount: paymentAmount, currency: "INR" },
+                    {
+                        auth: {
+                            username: process.env.RAZORPAY_KEY_ID,
+                            password: process.env.RAZORPAY_SECRET_KEY,
+                        },
+                    }
+                );
+
+                return res.json({
+                    success: true,
+                    status: "captured",
+                    message: "Payment Captured Successfully!",
                     payment_id: paymentId,
                 });
             } else {
@@ -110,12 +130,12 @@ app.post("/verify-payment", async (req, res) => {
             });
         }
     } catch (error) {
-        console.error("Error verifying payment:", error);
+        console.error("Error verifying payment:", error.response?.data || error.message);
         res.status(500).json({ error: "Payment verification error" });
     }
 });
 
-// ✅ NEW: Check Payment Status Route
+// ✅ Check Payment Status
 app.get("/payment-status", async (req, res) => {
     try {
         const { payment_id } = req.query;
@@ -124,7 +144,7 @@ app.get("/payment-status", async (req, res) => {
             return res.status(400).json({ error: "Missing payment_id" });
         }
 
-        // ✅ Fetch payment details from Razorpay
+        // ✅ Fetch payment details
         const response = await axios.get(
             `https://api.razorpay.com/v1/payments/${payment_id}`,
             {
@@ -143,7 +163,7 @@ app.get("/payment-status", async (req, res) => {
             return res.json({ success: false, status });
         }
     } catch (error) {
-        console.error("Error fetching payment status:", error);
+        console.error("Error fetching payment status:", error.response?.data || error.message);
         res.status(500).json({ error: "Failed to fetch payment status" });
     }
 });
@@ -176,6 +196,5 @@ app.post("/webhook", async (req, res) => {
         res.status(500).json({ error: "Webhook processing failed" });
     }
 });
-
 // ✅ Start Server
 app.listen(5000, () => console.log("🚀 Server running on port 5000")); 
