@@ -124,7 +124,7 @@ app.post("/webhook", asyncHandler(async (req, res) => {
 
     console.log("🔔 Webhook triggered:", payload.event);
 
-    // ✅ Generate Expected Signature
+    // Generate Expected Signature
     const generatedSignature = crypto
         .createHmac("sha256", webhookSecret)
         .update(JSON.stringify(payload))
@@ -135,13 +135,17 @@ app.post("/webhook", asyncHandler(async (req, res) => {
         return res.status(400).json({ error: "Invalid signature" });
     }
 
+    // Check for payment.captured event
     if (payload.event === "payment.captured") {
-        console.log(`✅ Payment Captured via Webhook: ${payload.payload.payment.entity.id}`);
+        const paymentId = payload.payload.payment.entity.id;
+        console.log(`✅ Payment Captured via Webhook: ${paymentId}`);
+        // Here, you can mark the payment as successful in your system
         return res.json({ status: "success" });
     }
 
     res.status(400).json({ error: "Unhandled webhook event" });
 }));
+
 
 // ✅ Get Order Status
 app.get("/order-status/:orderId", asyncHandler(async (req, res) => {
