@@ -11,13 +11,13 @@ app.use(cors());
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// ✅ Razorpay Instance
+// ✅ Initialize Razorpay
 const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
-// ✅ Generate QR Code for Payment
+// ✅ Function to Generate QR Code for UPI Payment
 const generateQRCode = (upiLink) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
 };
@@ -31,25 +31,26 @@ app.post("/create-order", async (req, res) => {
             return res.status(400).json({ error: "Amount is required" });
         }
 
-        // ✅ Create an order in Razorpay
+        // ✅ Create Razorpay Order
         const options = {
             amount: amount * 100, // Razorpay requires amount in paise
             currency: "INR",
             receipt: `order_${Date.now()}`,
-            payment_capture: 1, // Auto capture payment
+            payment_capture: 1, // Auto capture
         };
         const order = await razorpay.orders.create(options);
 
         // ✅ Generate UPI Payment Link
-        const upiPaymentLink = `upi://pay?pa=vprabhasivashankarsk-1@oksbi&pn=${encodeURIComponent(
-            "YourBusinessName"
-        )}&tn=${encodeURIComponent("Order Payment")}&am=${amount}&cu=INR`;
+        const upiPaymentLink = `upi://pay?pa=your-upi-id@oksbi&pn=${encodeURIComponent(
+            "VEND MASTER"
+        )}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
 
         // ✅ Generate QR Code for UPI Payment
         const qrCodeURL = generateQRCode(upiPaymentLink);
 
         // ✅ Send order details, UPI link & QR code
         res.json({
+            success: true,
             order_id: order.id,
             upiPaymentLink,
             qrCodeURL,
@@ -60,7 +61,7 @@ app.post("/create-order", async (req, res) => {
     }
 });
 
-// ✅ Verify Payment After UPI Transaction
+// ✅ Verify Payment After Transaction
 app.post("/verify-payment", async (req, res) => {
     try {
         const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
@@ -69,7 +70,7 @@ app.post("/verify-payment", async (req, res) => {
             return res.status(400).json({ error: "Missing required parameters" });
         }
 
-        // ✅ Generate expected signature
+        // ✅ Generate Expected Signature
         const expectedSignature = crypto
             .createHmac("sha256", process.env.RAZORPAY_SECRET_KEY)
             .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -115,7 +116,7 @@ app.post("/webhook", async (req, res) => {
         const payload = req.body;
         const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-        // ✅ Generate expected signature
+        // ✅ Generate Expected Signature
         const generatedSignature = crypto
             .createHmac("sha256", webhookSecret)
             .update(JSON.stringify(payload))
@@ -130,9 +131,6 @@ app.post("/webhook", async (req, res) => {
         if (payload.event === "payment.captured") {
             console.log(`✅ Payment captured: ${payload.payload.payment.entity.id}`);
 
-            // ✅ Update order in your database if needed
-            // Example: updateOrderStatus(payload.payload.payment.entity.order_id, "PAID");
-
             return res.json({ status: "success" });
         }
 
@@ -142,5 +140,10 @@ app.post("/webhook", async (req, res) => {
         res.status(500).json({ error: "Webhook processing failed" });
     }
 });
+
+// ✅ Start Server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
 // ✅ Start Server
 app.listen(5000, () => console.log("🚀 Server running on port 5000"));
