@@ -82,55 +82,56 @@ app.post("/verify-payment", async (req, res) => {
         );
 
         const payments = paymentDetails.data.items;
-        if (payments.length > 0) {
-            // ✅ Get the latest payment
-            const payment = payments[payments.length - 1];
-            const paymentStatus = payment.status;
-            const paymentId = payment.id;
-            const paymentAmount = payment.amount;
 
-            if (paymentStatus === "captured") {
-                return res.json({
-                    success: true,
-                    status: "Success",
-                    message: "Payment Successful!",
-                    payment_id: paymentId,
-                });
-            } else if (paymentStatus === "authorized") {
-                // ✅ Capture Payment Manually
-                await axios.post(
-                    `https://api.razorpay.com/v1/payments/${paymentId}/capture`,
-                    { amount: paymentAmount, currency: "INR" },
-                    {
-                        auth: {
-                            username: process.env.RAZORPAY_KEY_ID,
-                            password: process.env.RAZORPAY_SECRET_KEY,
-                        },
-                    }
-                );
-
-                return res.json({
-                    success: true,
-                    status: "captured",
-                    message: "Payment Captured Successfully!",
-                    payment_id: paymentId,
-                });
-            } else {
-                return res.json({
-                    success: false,
-                    status: paymentStatus,
-                    message: "Payment Pending or Failed!",
-                });
-            }
-        } else {
+        if (!payments || payments.length === 0) {
             return res.json({
                 success: false,
                 status: "No Payment Found",
                 message: "No payment detected for this order",
             });
         }
+
+        // ✅ Get the latest payment
+        const payment = payments[payments.length - 1];
+        const paymentStatus = payment.status;
+        const paymentId = payment.id;
+        const paymentAmount = payment.amount; // Already in paise
+
+        if (paymentStatus === "captured") {
+            return res.json({
+                success: true,
+                status: "Success",
+                message: "Payment Successful!",
+                payment_id: paymentId,
+            });
+        } else if (paymentStatus === "authorized") {
+            // ✅ Capture Payment Manually
+            await axios.post(
+                `https://api.razorpay.com/v1/payments/${paymentId}/capture`,
+                { amount: paymentAmount, currency: "INR" },
+                {
+                    auth: {
+                        username: process.env.RAZORPAY_KEY_ID,
+                        password: process.env.RAZORPAY_SECRET_KEY,
+                    },
+                }
+            );
+
+            return res.json({
+                success: true,
+                status: "captured",
+                message: "Payment Captured Successfully!",
+                payment_id: paymentId,
+            });
+        } else {
+            return res.json({
+                success: false,
+                status: paymentStatus,
+                message: "Payment Pending or Failed!",
+            });
+        }
     } catch (error) {
-        console.error("Error verifying payment:", error.response?.data || error.message);
+        console.error("Error verifying payment:", error.response?.data || error.toString());
         res.status(500).json({ error: "Payment verification error" });
     }
 });
@@ -163,10 +164,11 @@ app.get("/payment-status", async (req, res) => {
             return res.json({ success: false, status });
         }
     } catch (error) {
-        console.error("Error fetching payment status:", error.response?.data || error.message);
+        console.error("Error fetching payment status:", error.response?.data || error.toString());
         res.status(500).json({ error: "Failed to fetch payment status" });
     }
 });
+
 
 // ✅ Webhook for Automatic Payment Capture
 app.post("/webhook", async (req, res) => {
