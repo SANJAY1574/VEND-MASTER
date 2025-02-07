@@ -17,6 +17,11 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
+// ✅ Generate QR Code for Payment
+const generateQRCode = (upiLink) => {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
+};
+
 // ✅ Create Order & Generate UPI Payment Link
 app.post("/create-order", async (req, res) => {
     try {
@@ -40,8 +45,15 @@ app.post("/create-order", async (req, res) => {
             "YourBusinessName"
         )}&tn=${encodeURIComponent("Order Payment")}&am=${amount}&cu=INR`;
 
-        // ✅ Send order details & UPI link
-        res.json({ order_id: order.id, upiPaymentLink });
+        // ✅ Generate QR Code for UPI Payment
+        const qrCodeURL = generateQRCode(upiPaymentLink);
+
+        // ✅ Send order details, UPI link & QR code
+        res.json({
+            order_id: order.id,
+            upiPaymentLink,
+            qrCodeURL,
+        });
     } catch (error) {
         console.error("Error creating order:", error);
         res.status(500).json({ error: "Failed to create order" });
@@ -78,14 +90,14 @@ app.post("/verify-payment", async (req, res) => {
         const paymentStatus = paymentDetails.data.status;
 
         if (paymentStatus === "captured") {
-            res.json({
+            return res.json({
                 success: true,
                 status: "Success",
                 message: "Payment Successful!",
                 payment_id: razorpay_payment_id,
             });
         } else {
-            res.json({
+            return res.json({
                 success: false,
                 status: paymentStatus,
                 message: "Payment Pending or Failed!",
