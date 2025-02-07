@@ -19,7 +19,7 @@ const razorpay = new Razorpay({
 
 // ✅ Helper function to generate QR code
 const generateQRCode = (upiLink) => {
-    return https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)};
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
 };
 
 // ✅ Async error handler middleware
@@ -46,14 +46,14 @@ app.post("/create-order", asyncHandler(async (req, res) => {
     const order = await razorpay.orders.create(options);
 
     // ✅ Generate UPI Payment Link
-    const upiPaymentLink = upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent(
+    const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent(
         "VEND MASTER"
-    )}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR;
+    )}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
 
     // ✅ Generate QR Code for UPI Payment
     const qrCodeURL = generateQRCode(upiPaymentLink);
 
-    console.log(✅ Order Created: ${order.id});
+    console.log(`✅ Order Created: ${order.id}`);
 
     // ✅ Send order details, UPI link & QR code
     res.json({
@@ -83,10 +83,10 @@ app.post("/verify-payment", asyncHandler(async (req, res) => {
     }
 
     // ✅ Fetch payment details from Razorpay
-    console.log(🔍 Checking payment details for Payment ID: ${razorpay_payment_id});
+    console.log(`🔍 Checking payment details for Payment ID: ${razorpay_payment_id}`);
 
     const paymentDetails = await axios.get(
-        https://api.razorpay.com/v1/payments/${razorpay_payment_id},
+        `https://api.razorpay.com/v1/payments/${razorpay_payment_id}`,
         {
             auth: {
                 username: process.env.RAZORPAY_KEY_ID,
@@ -138,14 +138,13 @@ app.post("/webhook", asyncHandler(async (req, res) => {
     // Check for payment.captured event
     if (payload.event === "payment.captured") {
         const paymentId = payload.payload.payment.entity.id;
-        console.log(✅ Payment Captured via Webhook: ${paymentId});
+        console.log(`✅ Payment Captured via Webhook: ${paymentId}`);
         // Here, you can mark the payment as successful in your system
         return res.json({ status: "success" });
     }
 
     res.status(400).json({ error: "Unhandled webhook event" });
 }));
-
 
 // ✅ Get Order Status
 app.get("/order-status/:orderId", asyncHandler(async (req, res) => {
@@ -162,4 +161,4 @@ app.use((err, req, res, next) => {
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(🚀 Server running on port ${PORT})); 
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
