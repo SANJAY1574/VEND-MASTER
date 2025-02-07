@@ -110,6 +110,36 @@ app.post("/verify-payment", async (req, res) => {
     }
 });
 
+// ✅ NEW: Check Payment Status Route
+app.get("/payment-status", async (req, res) => {
+    try {
+        const { payment_id } = req.query;
+
+        if (!payment_id) {
+            return res.status(400).json({ error: "Missing payment_id" });
+        }
+
+        // ✅ Fetch payment details from Razorpay
+        const response = await axios.get(`https://api.razorpay.com/v1/payments/${payment_id}`, {
+            auth: {
+                username: process.env.RAZORPAY_KEY_ID,
+                password: process.env.RAZORPAY_SECRET_KEY,
+            },
+        });
+
+        const status = response.data.status;
+
+        if (status === "captured") {
+            return res.json({ success: true, status: "paid" });
+        } else {
+            return res.json({ success: false, status });
+        }
+    } catch (error) {
+        console.error("Error fetching payment status:", error);
+        res.status(500).json({ error: "Failed to fetch payment status" });
+    }
+});
+
 // ✅ Webhook for Automatic Payment Capture
 app.post("/webhook", async (req, res) => {
     try {
@@ -130,7 +160,6 @@ app.post("/webhook", async (req, res) => {
 
         if (payload.event === "payment.captured") {
             console.log(`✅ Payment captured: ${payload.payload.payment.entity.id}`);
-
             return res.json({ status: "success" });
         }
 
