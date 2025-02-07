@@ -73,6 +73,8 @@ app.post("/verify-payment", async (req, res) => {
         }
 
         // ✅ Fetch payment details from Razorpay
+        console.log(`🔍 Checking payments for Order ID: ${razorpay_order_id}`);
+
         const paymentDetails = await axios.get(
             `https://api.razorpay.com/v1/orders/${razorpay_order_id}/payments`,
             {
@@ -82,6 +84,8 @@ app.post("/verify-payment", async (req, res) => {
                 },
             }
         );
+
+        console.log("📝 Payment Details Response:", paymentDetails.data);
 
         const payments = paymentDetails.data.items;
 
@@ -149,6 +153,8 @@ app.post("/webhook", async (req, res) => {
         const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
         const signature = req.headers["x-razorpay-signature"];
 
+        console.log("🔔 Webhook triggered:", payload.event);
+
         // ✅ Generate Expected Signature
         const generatedSignature = crypto
             .createHmac("sha256", webhookSecret)
@@ -173,4 +179,5 @@ app.post("/webhook", async (req, res) => {
 });
 
 // ✅ Start Server
-app.listen(5000, () => console.log("🚀 Server running on port 5000"));
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
