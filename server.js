@@ -17,12 +17,9 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
-// Check if Razorpay instance is initialized correctly
-console.log("Razorpay Initialized:", razorpay); // Log Razorpay instance for debugging
-
-// ✅ Helper function to generate QR code for the payment link
+// ✅ Helper function to generate QR code
 const generateQRCode = (upiLink) => {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
+    return https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)};
 };
 
 // ✅ Async error handler middleware
@@ -30,7 +27,7 @@ const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-// ✅ Create Order & Generate UPI Payment Link (Razorpay)
+// ✅ Create Order & Generate UPI Payment Link
 app.post("/create-order", asyncHandler(async (req, res) => {
     const { amount } = req.body;
 
@@ -46,44 +43,23 @@ app.post("/create-order", asyncHandler(async (req, res) => {
         payment_capture: 1, // Auto capture
     };
 
-    // Check if orders API is available
-    if (!razorpay.orders) {
-        return res.status(500).json({ error: "Razorpay orders API not available" });
-    }
-
     const order = await razorpay.orders.create(options);
 
-    // ✅ Create Razorpay Payment Link (Using Razorpay's Payment Links API)
-    const paymentLinkOptions = {
-        amount: amount * 100, // Amount in paise
-        currency: "INR",
-        description: "Vending Machine Payment",
-        notify: {
-            sms: true,
-            email: true,
-        },
-        reference_id: "order_" + Date.now(),
-        callback_url: "https://vend-master.onrender.com/payment-success", // Replace with your success URL
-        cancel_url: "https://vend-master.onrender.com/payment-cancel", // Replace with your cancel URL
-    };
-
-    const paymentLink = await razorpay.paymentLinks.create(paymentLinkOptions);
-
-    // ✅ Generate QR Code for Razorpay Payment Link
-    const qrCodeURL = generateQRCode(paymentLink.short_url);
-
     // ✅ Generate UPI Payment Link
-    const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=Vending%20Machine&tn=Vending%20Machine%20Payment&am=${amount}&cu=INR`;
+    const upiPaymentLink = upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent(
+        "VEND MASTER"
+    )}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR;
 
-    console.log(`✅ Order Created: ${order.id}`);
-    console.log(`✅ Payment Link Created: ${paymentLink.short_url}`);
+    // ✅ Generate QR Code for UPI Payment
+    const qrCodeURL = generateQRCode(upiPaymentLink);
 
-    // ✅ Send order details, Razorpay payment link, UPI payment link & QR code URL
+    console.log(✅ Order Created: ${order.id});
+
+    // ✅ Send order details, UPI link & QR code
     res.json({
         success: true,
         order_id: order.id,
-        paymentLinkURL: paymentLink.short_url,
-        upiPaymentLink: upiPaymentLink, // Send UPI link as part of the response
+        upiPaymentLink,
         qrCodeURL,
     });
 }));
@@ -107,10 +83,10 @@ app.post("/verify-payment", asyncHandler(async (req, res) => {
     }
 
     // ✅ Fetch payment details from Razorpay
-    console.log(`🔍 Checking payment details for Payment ID: ${razorpay_payment_id}`);
+    console.log(🔍 Checking payment details for Payment ID: ${razorpay_payment_id});
 
     const paymentDetails = await axios.get(
-        `https://api.razorpay.com/v1/payments/${razorpay_payment_id}`,
+        https://api.razorpay.com/v1/payments/${razorpay_payment_id},
         {
             auth: {
                 username: process.env.RAZORPAY_KEY_ID,
@@ -140,7 +116,7 @@ app.post("/verify-payment", asyncHandler(async (req, res) => {
     }
 }));
 
-// ✅ Webhook for Automatic Payment Capture (to capture payments)
+// ✅ Webhook for Automatic Payment Capture
 app.post("/webhook", asyncHandler(async (req, res) => {
     const payload = req.body;
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -162,7 +138,7 @@ app.post("/webhook", asyncHandler(async (req, res) => {
     // Check for payment.captured event
     if (payload.event === "payment.captured") {
         const paymentId = payload.payload.payment.entity.id;
-        console.log(`✅ Payment Captured via Webhook: ${paymentId}`);
+        console.log(✅ Payment Captured via Webhook: ${paymentId});
         // Here, you can mark the payment as successful in your system
         return res.json({ status: "success" });
     }
@@ -170,7 +146,8 @@ app.post("/webhook", asyncHandler(async (req, res) => {
     res.status(400).json({ error: "Unhandled webhook event" });
 }));
 
-// ✅ Get Order Status (For tracking order status)
+
+// ✅ Get Order Status
 app.get("/order-status/:orderId", asyncHandler(async (req, res) => {
     const { orderId } = req.params;
     const order = await razorpay.orders.fetch(orderId);
@@ -185,4 +162,4 @@ app.use((err, req, res, next) => {
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(🚀 Server running on port ${PORT})); 
