@@ -17,7 +17,7 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
-// ✅ Helper function to generate QR code
+// ✅ Helper function to generate QR code for the payment link
 const generateQRCode = (upiLink) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
 };
@@ -27,7 +27,8 @@ const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-// ✅ Create Order & Generate UPI Payment Link
+// ✅ Create Order & Generate UPI Payment Link (Razorpay)
+// ✅ Create Order & Generate UPI Payment Link (Razorpay)
 app.post("/create-order", asyncHandler(async (req, res) => {
     const { amount } = req.body;
 
@@ -45,24 +46,42 @@ app.post("/create-order", asyncHandler(async (req, res) => {
 
     const order = await razorpay.orders.create(options);
 
-    // ✅ Generate UPI Payment Link
-    const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent(
-        "VEND MASTER"
-    )}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
+    // ✅ Create Razorpay Payment Link (Using Razorpay's Payment Links API)
+    const paymentLinkOptions = {
+        amount: amount * 100, // Amount in paise
+        currency: "INR",
+        description: "Vending Machine Payment",
+        notify: {
+            sms: true,
+            email: true,
+        },
+        reference_id: "order_" + Date.now(),
+        callback_url: "https://vend-master.onrender.com/payment-success", // Replace with your success URL
+        cancel_url: "https://vend-master.onrender.com/payment-cancel", // Replace with your cancel URL
+    };
 
-    // ✅ Generate QR Code for UPI Payment
-    const qrCodeURL = generateQRCode(upiPaymentLink);
+    const paymentLink = await razorpay.paymentLinks.create(paymentLinkOptions);
+
+    // ✅ Generate QR Code for Razorpay Payment Link
+    const qrCodeURL = generateQRCode(paymentLink.short_url);
+
+    // ✅ Generate UPI Payment Link
+    const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=Vending%20Machine&tn=Vending%20Machine%20Payment&am=${amount}&cu=INR`;
+
 
     console.log(`✅ Order Created: ${order.id}`);
+    console.log(`✅ Payment Link Created: ${paymentLink.short_url}`);
 
-    // ✅ Send order details, UPI link & QR code
+    // ✅ Send order details, Razorpay payment link, UPI payment link & QR code URL
     res.json({
         success: true,
         order_id: order.id,
-        upiPaymentLink,
+        paymentLinkURL: paymentLink.short_url,
+        upiPaymentLink: upiPaymentLink, // Send UPI link as part of the response
         qrCodeURL,
     });
 }));
+
 
 // ✅ Verify and Capture Payment
 app.post("/verify-payment", asyncHandler(async (req, res) => {
@@ -116,7 +135,7 @@ app.post("/verify-payment", asyncHandler(async (req, res) => {
     }
 }));
 
-// ✅ Webhook for Automatic Payment Capture
+// ✅ Webhook for Automatic Payment Capture (to capture payments)
 app.post("/webhook", asyncHandler(async (req, res) => {
     const payload = req.body;
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
@@ -146,8 +165,7 @@ app.post("/webhook", asyncHandler(async (req, res) => {
     res.status(400).json({ error: "Unhandled webhook event" });
 }));
 
-
-// ✅ Get Order Status
+// ✅ Get Order Status (For tracking order status)
 app.get("/order-status/:orderId", asyncHandler(async (req, res) => {
     const { orderId } = req.params;
     const order = await razorpay.orders.fetch(orderId);
