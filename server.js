@@ -5,11 +5,19 @@ const crypto = require("crypto");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const helmet = require("helmet"); // Added security module
 
 const app = express();
 app.use(cors());
+app.use(helmet()); // Secure HTTP headers
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
+
+// ✅ Ensure environment variables are set
+if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY) {
+    console.error("❌ Missing Razorpay API credentials. Set them in .env");
+    process.exit(1);
+}
 
 // ✅ Initialize Razorpay
 const razorpay = new Razorpay({
@@ -27,8 +35,8 @@ app.post("/create-order", async (req, res) => {
     try {
         const { amount } = req.body;
 
-        if (!amount) {
-            return res.status(400).json({ error: "Amount is required" });
+        if (!amount || isNaN(amount) || amount <= 0) {
+            return res.status(400).json({ error: "Invalid amount" });
         }
 
         // ✅ Create Razorpay Order
@@ -48,15 +56,17 @@ app.post("/create-order", async (req, res) => {
         // ✅ Generate QR Code for UPI Payment
         const qrCodeURL = generateQRCode(upiPaymentLink);
 
+        console.log(`✅ Order Created: ${order.id}, Amount: ₹${amount}`);
+
         // ✅ Send order details, UPI link & QR code
-        res.json({
+        res.status(201).json({
             success: true,
             order_id: order.id,
             upiPaymentLink,
             qrCodeURL,
         });
     } catch (error) {
-        console.error("Error creating order:", error);
+        console.error("❌ Error creating order:", error);
         res.status(500).json({ error: "Failed to create order" });
     }
 });
@@ -64,7 +74,7 @@ app.post("/create-order", async (req, res) => {
 // ✅ Verify Payment After Transaction
 app.post("/verify-payment", async (req, res) => {
     try {
-        const { razorpay_order_id } = req.body; // Only using order_id for verification
+        const { razorpay_order_id } = req.body;
 
         if (!razorpay_order_id) {
             return res.status(400).json({ error: "Order ID is required" });
@@ -84,6 +94,8 @@ app.post("/verify-payment", async (req, res) => {
             const payment = payments[0]; // Get the first successful payment
             const paymentStatus = payment.status;
             const paymentId = payment.id;
+
+            console.log(`🔍 Payment Status for ${razorpay_order_id}: ${paymentStatus}`);
 
             if (paymentStatus === "captured") {
                 return res.json({
@@ -107,12 +119,12 @@ app.post("/verify-payment", async (req, res) => {
             });
         }
     } catch (error) {
-        console.error("Error verifying payment:", error);
+        console.error("❌ Error verifying payment:", error);
         res.status(500).json({ error: "Payment verification error" });
     }
 });
 
-// ✅ NEW: Check Payment Status Route
+// ✅ Check Payment Status
 app.get("/payment-status", async (req, res) => {
     try {
         const { payment_id } = req.query;
@@ -130,6 +142,7 @@ app.get("/payment-status", async (req, res) => {
         });
 
         const status = response.data.status;
+        console.log(`🔄 Payment Status Check: ${payment_id} - ${status}`);
 
         if (status === "captured") {
             return res.json({ success: true, status: "paid" });
@@ -137,7 +150,7 @@ app.get("/payment-status", async (req, res) => {
             return res.json({ success: false, status });
         }
     } catch (error) {
-        console.error("Error fetching payment status:", error);
+        console.error("❌ Error fetching payment status:", error);
         res.status(500).json({ error: "Failed to fetch payment status" });
     }
 });
@@ -148,6 +161,11 @@ app.post("/webhook", async (req, res) => {
         const payload = req.body;
         const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
+        if (!webhookSecret) {
+            console.error("❌ Missing webhook secret");
+            return res.status(500).json({ error: "Webhook configuration error" });
+        }
+
         // ✅ Generate Expected Signature
         const generatedSignature = crypto
             .createHmac("sha256", webhookSecret)
@@ -157,17 +175,18 @@ app.post("/webhook", async (req, res) => {
         const signature = req.headers["x-razorpay-signature"];
 
         if (signature !== generatedSignature) {
+            console.warn("⚠️ Invalid Webhook Signature");
             return res.status(400).json({ error: "Invalid signature" });
         }
 
         if (payload.event === "payment.captured") {
-            console.log(`✅ Payment captured: ${payload.payload.payment.entity.id}`);
+            console.log(`✅ Payment Captured: ${payload.payload.payment.entity.id}`);
             return res.json({ status: "success" });
         }
 
         res.status(400).json({ error: "Unhandled webhook event" });
     } catch (error) {
-        console.error("Webhook error:", error);
+        console.error("❌ Webhook error:", error);
         res.status(500).json({ error: "Webhook processing failed" });
     }
 });
