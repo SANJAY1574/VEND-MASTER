@@ -64,44 +64,46 @@ app.post("/create-order", async (req, res) => {
 // ✅ Verify Payment After Transaction
 app.post("/verify-payment", async (req, res) => {
     try {
-        const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+        const { razorpay_order_id } = req.body; // Only using order_id for verification
 
-        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-            return res.status(400).json({ error: "Missing required parameters" });
-        }
-
-        // ✅ Generate Expected Signature
-        const expectedSignature = crypto
-            .createHmac("sha256", process.env.RAZORPAY_SECRET_KEY)
-            .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-            .digest("hex");
-
-        if (expectedSignature !== razorpay_signature) {
-            return res.status(400).json({ error: "Invalid signature, payment verification failed" });
+        if (!razorpay_order_id) {
+            return res.status(400).json({ error: "Order ID is required" });
         }
 
         // ✅ Fetch payment details from Razorpay
-        const paymentDetails = await axios.get(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
+        const paymentDetails = await axios.get(`https://api.razorpay.com/v1/orders/${razorpay_order_id}/payments`, {
             auth: {
                 username: process.env.RAZORPAY_KEY_ID,
                 password: process.env.RAZORPAY_SECRET_KEY,
             },
         });
 
-        const paymentStatus = paymentDetails.data.status;
+        // ✅ Extract Payment ID and Status
+        const payments = paymentDetails.data.items;
+        if (payments.length > 0) {
+            const payment = payments[0]; // Get the first successful payment
+            const paymentStatus = payment.status;
+            const paymentId = payment.id;
 
-        if (paymentStatus === "captured") {
-            return res.json({
-                success: true,
-                status: "Success",
-                message: "Payment Successful!",
-                payment_id: razorpay_payment_id,
-            });
+            if (paymentStatus === "captured") {
+                return res.json({
+                    success: true,
+                    status: "Success",
+                    message: "Payment Successful!",
+                    payment_id: paymentId,
+                });
+            } else {
+                return res.json({
+                    success: false,
+                    status: paymentStatus,
+                    message: "Payment Pending or Failed!",
+                });
+            }
         } else {
             return res.json({
                 success: false,
-                status: paymentStatus,
-                message: "Payment Pending or Failed!",
+                status: "No Payment Found",
+                message: "No payment detected for this order",
             });
         }
     } catch (error) {
