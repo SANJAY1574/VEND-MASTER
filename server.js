@@ -29,43 +29,44 @@ const asyncHandler = (fn) => (req, res, next) => {
 
 // ✅ Create Order & Generate Razorpay Payment Link with QR Code
 app.post("/create-order", asyncHandler(async (req, res) => {
-    const { amount } = req.body;
+    try {
+        const { amount } = req.body;
+        if (!amount || isNaN(amount) || amount <= 0) {
+            console.log("❌ Invalid amount received:", amount);
+            return res.status(400).json({ error: "Invalid amount specified" });
+        }
 
-    if (!amount || isNaN(amount) || amount <= 0) {
-        return res.status(400).json({ error: "Invalid amount specified" });
+        console.log("✅ Creating payment link for amount:", amount);
+
+        // ✅ Create Payment Link
+        const paymentLinkOptions = {
+            amount: amount * 100,
+            currency: "INR",
+            description: "Payment for your order",
+            customer: {
+                name: "Test User",
+                contact: "9999999999",
+                email: "test@example.com"
+            },
+            callback_url: "https://your-frontend.com/payment-success",
+            callback_method: "get"
+        };
+
+        const paymentLink = await razorpay.paymentLink.create(paymentLinkOptions);
+        console.log("✅ Payment link created successfully:", paymentLink.short_url);
+
+        res.json({
+            success: true,
+            order_id: paymentLink.id,
+            paymentLink: paymentLink.short_url,
+            qrCodeURL: generateQRCode(paymentLink.short_url),
+        });
+    } catch (error) {
+        console.error("❌ Error in /create-order:", error.message);
+        res.status(500).json({ error: "Internal Server Error" });
     }
-
-    // ✅ Create Payment Link (Best for QR Code Payments)
-    const paymentLinkOptions = {
-        amount: amount * 100, // Amount in paise
-        currency: "INR",
-        description: "Payment for your order",
-        customer: {
-            name: "Customer Name",
-            contact: "9999999999",  // Replace with actual phone number
-            email: "customer@example.com" // Replace with actual email
-        },
-        expire_by: Math.floor(Date.now() / 1000) + 900, // Expiry time (15 minutes)
-        notify: { sms: true, email: true },
-        reminder_enable: true,
-        callback_url: "https://vend-master.onrender.com/payment-success", // Replace with actual frontend URL
-        callback_method: "get"
-    };
-
-    const paymentLink = await razorpay.paymentLink.create(paymentLinkOptions);
-
-    // ✅ Generate QR Code for Payment Link
-    const qrCodeURL = generateQRCode(paymentLink.short_url);
-
-    console.log(`✅ Payment Link Created: ${paymentLink.short_url}`);
-
-    res.json({
-        success: true,
-        order_id: paymentLink.id,
-        paymentLink: paymentLink.short_url,
-        qrCodeURL,
-    });
 }));
+
 
 // ✅ Webhook for Automatic Payment Capture
 app.post("/webhook", express.json(), asyncHandler(async (req, res) => {
