@@ -53,12 +53,9 @@ app.post("/create-order", asyncHandler(async (req, res) => {
         const paymentLinkResponse = await razorpay.paymentLink.create(paymentLinkData);
         console.log("✅ Payment Link Created:", paymentLinkResponse);
 
-        const qrCodeURL = generateQRCode(paymentLinkResponse.short_url);
-
         res.json({
             success: true,
             paymentLink: paymentLinkResponse.short_url, // ✅ Correct Razorpay Link
-            qrCodeURL,
         });
 
     } catch (error) {
