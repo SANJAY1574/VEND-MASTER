@@ -37,27 +37,27 @@ app.post("/create-order", asyncHandler(async (req, res) => {
             return res.status(400).json({ error: "Invalid amount specified" });
         }
 
-        console.log("✅ Creating order for amount:", amount);
+        console.log("✅ Creating Razorpay Payment Link for:", amount);
 
-        // ✅ Create Razorpay Order
-        const options = {
+        // ✅ Create Razorpay Payment Link
+        const paymentLinkData = {
             amount: amount * 100, // Convert to paise
             currency: "INR",
-            receipt: "order_" + Date.now(),
-            payment_capture: 1, // Auto capture
+            description: "Stationery Vending Payment",
+            expire_by: Math.floor(Date.now() / 1000) + 600, // Expires in 10 mins
+            reference_id: "txn_" + Date.now(),
+            callback_url: "https://vend-master.onrender.com/payment-success",
+            callback_method: "get",
         };
 
-        const order = await razorpay.orders.create(options);
-        console.log("✅ Order Created Successfully:", order);
+        const paymentLinkResponse = await razorpay.paymentLink.create(paymentLinkData);
+        console.log("✅ Payment Link Created:", paymentLinkResponse);
 
-        // ✅ Generate Razorpay Checkout Link
-        const paymentLink = `https://checkout.razorpay.com/v1/checkout.js?order_id=${order.id}`;
-        const qrCodeURL = generateQRCode(paymentLink);
+        const qrCodeURL = generateQRCode(paymentLinkResponse.short_url);
 
         res.json({
             success: true,
-            order_id: order.id,
-            paymentLink,
+            paymentLink: paymentLinkResponse.short_url, // ✅ Correct Razorpay Link
             qrCodeURL,
         });
 
@@ -66,6 +66,7 @@ app.post("/create-order", asyncHandler(async (req, res) => {
         res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
 }));
+
 
 // ✅ Verify Payment and Capture
 app.post("/verify-payment", asyncHandler(async (req, res) => {
