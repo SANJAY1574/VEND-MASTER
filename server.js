@@ -17,7 +17,7 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
-// ✅ Helper function to generate QR Code for Razorpay Payment Link
+// ✅ Function to generate QR Code for Payment
 const generateQRCode = (paymentLink) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(paymentLink)}`;
 };
@@ -27,95 +27,146 @@ const asyncHandler = (fn) => (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-// ✅ Create Order & Generate Razorpay Payment Link with QR Code
+// ✅ Create Order & Generate Razorpay Payment Link
 app.post("/create-order", asyncHandler(async (req, res) => {
     try {
         const { amount } = req.body;
+
         if (!amount || isNaN(amount) || amount <= 0) {
             console.log("❌ Invalid amount received:", amount);
             return res.status(400).json({ error: "Invalid amount specified" });
         }
 
-        console.log("✅ Creating payment link for amount:", amount);
+        console.log("✅ Creating order for amount:", amount);
 
-        // ✅ Create Payment Link
-        const paymentLinkOptions = {
-            amount: amount * 100,
+        // ✅ Create Razorpay Order
+        const options = {
+            amount: amount * 100, // Convert to paise
             currency: "INR",
-            description: "Payment for your order",
-            customer: {
-                name: "Test User",
-                contact: "9999999999",
-                email: "test@example.com"
-            },
-            callback_url: "https://your-frontend.com/payment-success",
-            callback_method: "get"
+            receipt: "order_" + Date.now(),
+            payment_capture: 1, // Auto capture
         };
 
-        const paymentLink = await razorpay.paymentLink.create(paymentLinkOptions);
-        console.log("✅ Payment link created successfully:", paymentLink.short_url);
+        const order = await razorpay.orders.create(options);
+        console.log("✅ Order Created Successfully:", order);
+
+        // ✅ Generate Razorpay Checkout Link
+        const paymentLink = `https://checkout.razorpay.com/v1/checkout.js?order_id=${order.id}`;
+        const qrCodeURL = generateQRCode(paymentLink);
 
         res.json({
             success: true,
-            order_id: paymentLink.id,
-            paymentLink: paymentLink.short_url,
-            qrCodeURL: generateQRCode(paymentLink.short_url),
+            order_id: order.id,
+            paymentLink,
+            qrCodeURL,
         });
+
     } catch (error) {
-        console.error("❌ Error in /create-order:", error.message);
-        res.status(500).json({ error: "Internal Server Error" });
+        console.error("❌ Error in /create-order:", error);
+        res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
 }));
 
+// ✅ Verify Payment and Capture
+app.post("/verify-payment", asyncHandler(async (req, res) => {
+    try {
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+        if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+            return res.status(400).json({ error: "Missing payment details" });
+        }
+
+        // ✅ Verify payment signature
+        const generatedSignature = crypto
+            .createHmac("sha256", process.env.RAZORPAY_SECRET_KEY)
+            .update(razorpay_order_id + "|" + razorpay_payment_id)
+            .digest("hex");
+
+        if (generatedSignature !== razorpay_signature) {
+            return res.status(400).json({ error: "Invalid payment signature" });
+        }
+
+        // ✅ Fetch payment details from Razorpay
+        console.log(`🔍 Checking payment details for Payment ID: ${razorpay_payment_id}`);
+
+        const paymentDetails = await axios.get(
+            `https://api.razorpay.com/v1/payments/${razorpay_payment_id}`,
+            {
+                auth: {
+                    username: process.env.RAZORPAY_KEY_ID,
+                    password: process.env.RAZORPAY_SECRET_KEY,
+                },
+            }
+        );
+
+        console.log("📝 Payment Details Response:", paymentDetails.data);
+
+        const payment = paymentDetails.data;
+        const paymentStatus = payment.status;
+
+        if (paymentStatus === "captured") {
+            return res.json({
+                success: true,
+                status: "Success",
+                message: "Payment Captured Successfully!",
+                payment_id: razorpay_payment_id,
+            });
+        } else {
+            return res.json({
+                success: false,
+                status: paymentStatus,
+                message: "Payment Pending or Failed!",
+            });
+        }
+    } catch (error) {
+        console.error("❌ Error in /verify-payment:", error);
+        res.status(500).json({ error: "Internal Server Error", details: error.message });
+    }
+}));
 
 // ✅ Webhook for Automatic Payment Capture
-app.post("/webhook", express.json(), asyncHandler(async (req, res) => {
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-    const signature = req.headers["x-razorpay-signature"];
-    const payload = JSON.stringify(req.body);
+app.post("/webhook", asyncHandler(async (req, res) => {
+    try {
+        const payload = req.body;
+        const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+        const signature = req.headers["x-razorpay-signature"];
 
-    console.log("🔔 Webhook Event Received:", req.body.event);
+        console.log("🔔 Webhook triggered:", payload.event);
 
-    // ✅ Verify Webhook Signature
-    const expectedSignature = crypto
-        .createHmac("sha256", webhookSecret)
-        .update(payload)
-        .digest("hex");
+        // Generate Expected Signature
+        const generatedSignature = crypto
+            .createHmac("sha256", webhookSecret)
+            .update(JSON.stringify(payload))
+            .digest("hex");
 
-    if (signature !== expectedSignature) {
-        console.warn("❌ Invalid Webhook Signature");
-        return res.status(400).json({ error: "Invalid signature" });
+        if (signature !== generatedSignature) {
+            console.warn("❌ Invalid Webhook Signature");
+            return res.status(400).json({ error: "Invalid signature" });
+        }
+
+        // ✅ Process payment.captured event
+        if (payload.event === "payment.captured") {
+            const paymentId = payload.payload.payment.entity.id;
+            console.log(`✅ Payment Captured via Webhook: ${paymentId}`);
+            return res.json({ status: "success" });
+        }
+
+        res.status(400).json({ error: "Unhandled webhook event" });
+    } catch (error) {
+        console.error("❌ Error in /webhook:", error);
+        res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
-
-    // ✅ Process Webhook Events
-    const event = req.body.event;
-    const paymentId = req.body.payload.payment.entity.id;
-
-    if (event === "payment.captured") {
-        console.log(`✅ Payment Captured: ${paymentId}`);
-        return res.json({ success: true, message: "Payment captured successfully" });
-    } else if (event === "payment.failed") {
-        console.warn(`❌ Payment Failed: ${paymentId}`);
-        return res.json({ success: false, message: "Payment failed" });
-    }
-
-    res.status(400).json({ error: "Unhandled webhook event" });
 }));
 
-// ✅ Get Order Status (For Frontend Polling)
+// ✅ Get Order Status
 app.get("/order-status/:orderId", asyncHandler(async (req, res) => {
     try {
         const { orderId } = req.params;
-        const order = await razorpay.paymentLink.fetch(orderId);
-
-        res.json({
-            success: true,
-            order_status: order.status,  // Returns 'paid', 'expired', or 'pending'
-            order,
-        });
+        const order = await razorpay.orders.fetch(orderId);
+        res.json({ success: true, order });
     } catch (error) {
-        console.error("❌ Error Fetching Order Status:", error.message);
-        res.status(400).json({ error: "Invalid Order ID" });
+        console.error("❌ Error in /order-status:", error);
+        res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
 }));
 
