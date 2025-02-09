@@ -56,7 +56,7 @@ app.post("/create-upi-payment", async (req, res) => {
         console.log("✅ Razorpay Order Created:", order);
 
         // ✅ Generate UPI Payment Link
-        const payeeAddress = "yourupi@upi"; // Replace with your UPI ID
+        const payeeAddress = "vprabhasivashankarsk-1@oksbi"; // Replace with your UPI ID
         const payeeName = "Your Name"; // Replace with your name/business name
         const transactionNote = `Payment for Order #${transactionId}`; // Custom note for the payment
         const currency = "INR"; // Currency type
