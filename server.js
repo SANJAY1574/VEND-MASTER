@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
 // ✅ Check if API Keys are Set
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY || !process.env.UPI_ID) {
+if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY || !process.env.UPI_RECIPIENT_ID) {
     console.error("❌ ERROR: Missing Razorpay API Keys or UPI ID. Check your .env file.");
     process.exit(1);
 }
@@ -52,14 +52,16 @@ app.post("/create-upi-payment", async (req, res) => {
         console.log("✅ Razorpay Order Created:", order);
 
         // ✅ Generate UPI Payment Link using Valid Business UPI ID
-        const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent("VEND MASTER")}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
+        const upiPaymentLink = `upi://pay?pa=${process.env.UPI_RECIPIENT_ID}&pn=${encodeURIComponent(
+            "VEND MASTER"
+        )}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
 
         console.log("✅ UPI Payment Link:", upiPaymentLink);
 
         // ✅ Generate QR Code for UPI Payment
         const qrCodeImage = qr.image(upiPaymentLink, { type: "png" });
         const qrCodePath = path.join(qrCodeDir, `payment_qr_${Date.now()}.png`);
-        
+
         const qrStream = fs.createWriteStream(qrCodePath);
         qrCodeImage.pipe(qrStream);
 
@@ -67,7 +69,7 @@ app.post("/create-upi-payment", async (req, res) => {
             res.json({
                 success: true,
                 upiPaymentUrl: upiPaymentLink,
-                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your IP address
+                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Update with your server URL
             });
         });
 
@@ -86,7 +88,6 @@ app.post("/create-upi-payment", async (req, res) => {
 app.use("/qrcodes", express.static(qrCodeDir));
 
 // ✅ Payment Verification Endpoint
-// ✅ Payment Verification Endpoint
 app.post("/verify-payment", async (req, res) => {
     try {
         const { paymentId, orderId, signature } = req.body;
@@ -96,17 +97,14 @@ app.post("/verify-payment", async (req, res) => {
             return res.status(400).json({ error: "Missing required payment details." });
         }
 
-        // Razorpay's method to verify the signature
-        const body = orderId + "|" + paymentId;
+        const generatedSignature = razorpay.utils.generateSignature(orderId, paymentId);
 
-        // Using Razorpay's verifyPaymentSignature method
-        razorpay.orders.verifyPaymentSignature({
-            order_id: orderId,
-            payment_id: paymentId,
-            signature: signature,
-        });
+        // Verify the payment signature
+        if (generatedSignature !== signature) {
+            return res.status(400).json({ error: "Invalid payment signature. Verification failed." });
+        }
 
-        // ✅ Fetch Payment Details from Razorpay
+        // Payment is verified, proceed to check payment status
         const paymentDetails = await razorpay.payments.fetch(paymentId);
 
         if (paymentDetails.status === "captured") {
@@ -118,7 +116,7 @@ app.post("/verify-payment", async (req, res) => {
         console.error("❌ Error verifying payment:", error.response?.data || error.message || error);
         res.status(500).json({ error: "Internal Server Error" });
     }
-};
+});
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
