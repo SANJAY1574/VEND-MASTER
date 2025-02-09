@@ -19,7 +19,9 @@ const razorpay = new Razorpay({
 
 // ✅ Helper function to generate QR code
 const generateQRCode = (upiLink) => {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
+    const qrCodeURL = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${encodeURIComponent(upiLink)}`;
+    console.log(`Generated QR Code URL: ${qrCodeURL}`); // Add logging for debugging
+    return qrCodeURL;
 };
 
 // ✅ Async error handler middleware
