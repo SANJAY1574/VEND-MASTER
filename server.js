@@ -94,9 +94,12 @@ app.post("/create-upi-payment", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error creating UPI payment:", error.response?.data || error.message || error);
-        res.status(500).json({ error: "Internal Server Error" });
-    }
+    console.error("❌ Error creating UPI payment:", error); // Log full error object
+    console.error("🔍 Error details:", error.response?.data || error.message || error);
+    
+    res.status(500).json({ error: "Internal Server Error" });
+}
+
 });
 
 // ✅ Serve QR Code Images
