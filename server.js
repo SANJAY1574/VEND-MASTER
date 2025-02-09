@@ -44,11 +44,11 @@ app.post("/create-upi-payment", async (req, res) => {
 
         // ✅ Create Razorpay Order (Only necessary fields)
         const order = await razorpay.orders.create({
-            amount: Math.round(amount * 100), // Convert to paise
-            currency: "INR",
-            payment_capture: 1, // Auto-capture payment after success
-            method: "upi" // **UPI as the only method**
-        });
+    amount: Math.round(amount * 100), // Convert to paise
+    currency: "INR",
+    payment_capture: 1, // Auto-capture after success
+    method: "upi", // Ensure UPI is enabled
+});
 
         console.log("✅ Razorpay Order Created:", order);
 
