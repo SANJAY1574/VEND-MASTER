@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// ✅ Validate Environment Variables
+// ✅ Validate API Keys and UPI ID
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY || !process.env.UPI_RECIPIENT_ID) {
     console.error("❌ ERROR: Missing Razorpay API Keys or UPI ID. Check your .env file.");
     process.exit(1);
@@ -33,27 +33,40 @@ if (!fs.existsSync(qrCodeDir)) {
 // ✅ Create UPI Payment & Generate QR Code
 app.post("/create-upi-payment", async (req, res) => {
     try {
-        const { amount, phone, email } = req.body;
+        const { amount } = req.body;
 
         // ✅ Validate Amount
         if (!amount || isNaN(amount) || amount <= 0) {
-            return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
+            return res.status(400).json({ error: "Invalid amount. Must be a positive number." });
         }
 
         console.log("🔹 Creating UPI payment for amount:", amount);
 
-        // ✅ Generate Razorpay Payment Link
+        // ✅ Create Razorpay Order (Only necessary fields)
+        const order = await razorpay.orders.create({
+            amount: Math.round(amount * 100), // Convert to paise
+            currency: "INR",
+            payment_capture: 1, // Auto-capture payment after success
+            method: "upi" // **UPI as the only method**
+        });
+
+        console.log("✅ Razorpay Order Created:", order);
+
+        // ✅ Generate Razorpay Payment Link (Only Required Fields)
         const paymentLink = await razorpay.paymentLink.create({
             amount: Math.round(amount * 100), // Convert to paise
             currency: "INR",
             description: "Payment for Vending Machine",
             customer: {
-                contact: phone || "9876543210", // Provide test contact if not given
-                email: email || "test@example.com",
+                contact: "9876543210", // Test number (replace with actual)
+                email: "test@example.com"
             },
-            upi: {
-                vpa: process.env.UPI_RECIPIENT_ID // Ensure it's a valid business UPI ID
+            notify: {
+                sms: true,
+                email: true
             },
+            accept_partial: false,
+            method: "upi",
             callback_url: "https://yourwebsite.com/payment-success",
             callback_method: "get"
         });
