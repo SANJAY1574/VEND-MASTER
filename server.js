@@ -6,7 +6,6 @@ const qr = require("qr-image"); // QR Code generator
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto"); // For signature generation
 
 const app = express();
 app.use(cors({ origin: "*" })); // Allow all origins for testing in a development environment
@@ -68,7 +67,7 @@ app.post("/create-upi-payment", async (req, res) => {
             res.json({
                 success: true,
                 upiPaymentUrl,
-                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your IP address
+                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your actual domain/IP
             });
         });
 
@@ -104,13 +103,16 @@ app.post("/verify-payment", async (req, res) => {
             return res.status(400).json({ error: "Invalid payment signature. Verification failed." });
         }
 
-        // Payment is verified, proceed to check payment status
+        // ✅ Fetch payment details from Razorpay
         const paymentDetails = await razorpay.payments.fetch(paymentId);
 
         if (paymentDetails.status === "captured") {
             res.json({ success: true, message: "Payment verified successfully." });
         } else {
-            res.status(400).json({ error: "Payment not captured. Please try again." });
+            return res.status(400).json({
+                error: "Payment not captured. Please check the payment status and try again.",
+                refundMessage: "The payment has not been captured. Please ensure the payment was successful."
+            });
         }
     } catch (error) {
         console.error("❌ Error verifying payment:", error.response?.data || error.message || error);
@@ -118,10 +120,9 @@ app.post("/verify-payment", async (req, res) => {
     }
 });
 
-// ✅ Signature Generation Function
+// ✅ Helper function to generate signature for verification
 function generateSignature(orderId, paymentId) {
-    const secret = process.env.RAZORPAY_SECRET_KEY;
-    const hmac = crypto.createHmac('sha256', secret);
+    const hmac = require('crypto').createHmac('sha256', process.env.RAZORPAY_SECRET_KEY);
     hmac.update(orderId + "|" + paymentId);
     return hmac.digest('hex');
 }
