@@ -69,7 +69,8 @@ app.post("/create-upi-payment", async (req, res) => {
                 success: true,
                 orderId: order.id,
                 upiPaymentUrl,
-                qrCodeUrl: `https://your-domain.com/qrcodes/${path.basename(qrCodePath)}`,
+                qrCodeUrl: `${req.protocol}://${req.get("host")}/qrcodes/${path.basename(qrCodePath)}`,
+
             });
         });
 
@@ -85,7 +86,14 @@ app.post("/create-upi-payment", async (req, res) => {
 });
 
 // ✅ Serve QR Code Images
-app.use("/qrcodes", express.static(qrCodeDir));
+// ✅ Serve QR Code Images (Make Static Files Publicly Accessible)
+app.use("/qrcodes", express.static(qrCodeDir, { 
+    setHeaders: (res, path) => {
+        res.set("Access-Control-Allow-Origin", "*");  // Allow access from anywhere
+        res.set("Content-Type", "image/png"); // Ensure correct MIME type
+    }
+}));
+
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
