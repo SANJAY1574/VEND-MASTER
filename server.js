@@ -3,14 +3,12 @@ const express = require("express");
 const Razorpay = require("razorpay");
 const cors = require("cors");
 const qr = require("qr-image");
-const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(bodyParser.urlencoded({ extended: false }));
 
 // ✅ Check if API Keys are Set
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY) {
@@ -35,37 +33,50 @@ app.post("/create-upi-payment", async (req, res) => {
     try {
         const { amount } = req.body;
 
-        // Validate Amount
         if (!amount || isNaN(amount) || amount <= 0) {
             return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
         }
 
-        console.log("🔹 Creating Razorpay order for amount:", amount);
+        console.log("🔹 Creating Razorpay Payment Link for amount:", amount);
 
-        // ✅ Create Razorpay Order
-        const order = await razorpay.orders.create({
+        // ✅ Create Payment Link using Razorpay API
+        const paymentLinkData = {
             amount: Math.round(amount * 100), // Convert to paise
             currency: "INR",
-            payment_capture: 1,
-        });
+            accept_partial: false,
+            description: "Payment for vending machine purchase",
+            customer: {
+                name: "Customer Name",
+                email: "customer@example.com",
+                contact: "9876543210",
+            },
+            notify: {
+                sms: true,
+                email: true,
+            },
+            reminder_enable: true,
+            expire_by: Math.floor(Date.now() / 1000) + 3600, // Link expires in 1 hour
+            reference_id: "txn_" + Date.now(),
+            callback_url: "https://vend-master.onrender.com/payment-success",
+            callback_method: "get",
+        };
 
-        console.log("✅ Razorpay Order Created:", order);
+        const paymentLink = await razorpay.paymentLink.create(paymentLinkData);
 
-        // ✅ Generate Payment Link
-        const paymentLink = `https://rzp.io/i/${order.id}`;
-        console.log("✅ Razorpay Payment Link:", paymentLink);
+        console.log("✅ Razorpay Payment Link Created:", paymentLink);
 
-        // ✅ Generate QR Code for Payment
-        const qrCodeImage = qr.image(paymentLink, { type: "png" });
+        // ✅ Generate QR Code for Payment Link
+        const qrCodeImage = qr.image(paymentLink.short_url, { type: "png" });
         const qrCodePath = path.join(qrCodeDir, `payment_qr_${Date.now()}.png`);
 
         const qrStream = fs.createWriteStream(qrCodePath);
         qrCodeImage.pipe(qrStream);
 
         qrStream.on("finish", () => {
+            console.log("✅ QR Code successfully created:", qrCodePath);
             res.json({
                 success: true,
-                paymentLink,
+                paymentLink: paymentLink.short_url,
                 qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`,
             });
         });
@@ -76,10 +87,11 @@ app.post("/create-upi-payment", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error creating Razorpay payment:", error.response?.data || error.message || error);
+        console.error("❌ Error creating Razorpay Payment Link:", error.response?.data || error.message || error);
         res.status(500).json({ error: error.response?.data || "Internal Server Error" });
     }
 });
+
 
 // ✅ Serve QR Code Images
 app.use("/qrcodes", express.static(qrCodeDir));
