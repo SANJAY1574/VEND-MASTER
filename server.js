@@ -52,9 +52,7 @@ app.post("/create-upi-payment", async (req, res) => {
         console.log("✅ Razorpay Order Created:", order);
 
         // ✅ Generate UPI Payment Link using Valid Business UPI ID
-        // UPI payment URL format:
         const upiPaymentUrl = `upi://pay?pa=${process.env.UPI_RECIPIENT_ID}&pn=VendMaster&mc=0000&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR`;
-
 
         console.log("✅ UPI Payment Link:", upiPaymentUrl);
 
@@ -69,7 +67,7 @@ app.post("/create-upi-payment", async (req, res) => {
             res.json({
                 success: true,
                 upiPaymentUrl,
-                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your actual domain/IP
+                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your IP address
             });
         });
 
@@ -97,42 +95,26 @@ app.post("/verify-payment", async (req, res) => {
             return res.status(400).json({ error: "Missing required payment details." });
         }
 
-        // ✅ Generate the signature manually
-        const generatedSignature = generateSignature(orderId, paymentId);
+        const generatedSignature = razorpay.utils.generateSignature(orderId, paymentId);
 
         // Verify the payment signature
         if (generatedSignature !== signature) {
             return res.status(400).json({ error: "Invalid payment signature. Verification failed." });
         }
 
-        // ✅ Fetch payment details from Razorpay
+        // Payment is verified, proceed to check payment status
         const paymentDetails = await razorpay.payments.fetch(paymentId);
 
         if (paymentDetails.status === "captured") {
             res.json({ success: true, message: "Payment verified successfully." });
-        } else if (paymentDetails.status === "failed") {
-            res.status(400).json({
-                error: "Payment failed. Please check your payment method and try again.",
-            });
         } else {
-            res.status(400).json({
-                error: "Payment status is not captured. Please try again later.",
-                refundMessage: "Your money will be refunded if the payment does not go through."
-            });
+            res.status(400).json({ error: "Payment not captured. Please try again." });
         }
     } catch (error) {
-        console.error("❌ Error verifying payment:", error);
+        console.error("❌ Error verifying payment:", error.response?.data || error.message || error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
-
-
-// ✅ Helper function to generate signature for verification
-function generateSignature(orderId, paymentId) {
-    const hmac = require('crypto').createHmac('sha256', process.env.RAZORPAY_SECRET_KEY);
-    hmac.update(orderId + "|" + paymentId);
-    return hmac.digest('hex');
-}
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
