@@ -30,14 +30,18 @@ if (!fs.existsSync(qrCodeDir)) {
     fs.mkdirSync(qrCodeDir);
 }
 
-// ✅ Create Razorpay Order & Generate Payment Link with QR Code
+// ✅ Create Razorpay Order & Generate UPI Payment Link with QR Code
 app.post("/create-upi-payment", async (req, res) => {
     try {
-        const { amount } = req.body;
+        const { amount, transactionId, customerName } = req.body;
 
         // Validate Amount
         if (!amount || isNaN(amount) || amount <= 0) {
             return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
+        }
+
+        if (!transactionId || !customerName) {
+            return res.status(400).json({ error: "Missing transaction details." });
         }
 
         console.log("🔹 Creating Razorpay payment for amount:", amount);
@@ -51,14 +55,17 @@ app.post("/create-upi-payment", async (req, res) => {
 
         console.log("✅ Razorpay Order Created:", order);
 
-        // ✅ Generate Payment Link (Razorpay's Checkout page automatically handles payments)
-        const paymentLink = `https://checkout.razorpay.com/v1/checkout.js?order_id=${order.id}`;
+        // ✅ Generate UPI Payment Link
+        const payeeAddress = "yourupi@upi"; // Replace with your UPI ID
+        const payeeName = "Your Name"; // Replace with your name/business name
+        const transactionNote = `Payment for Order #${transactionId}`; // Custom note for the payment
+        const currency = "INR"; // Currency type
+        
+        const upiLink = `upi://pay?pa=${payeeAddress}&pn=${payeeName}&tid=${transactionId}&tn=${transactionNote}&am=${amount}&cu=${currency}`;
 
-        console.log("✅ Razorpay Payment Link:", paymentLink);
-
-        // ✅ Generate QR Code for Payment Link
-        const qrCodeImage = qr.image(paymentLink, { type: "png" });
-        const qrCodePath = path.join(qrCodeDir, `payment_qr_${Date.now()}.png`);
+        // ✅ Generate QR Code for UPI Link
+        const qrCodeImage = qr.image(upiLink, { type: "png" });
+        const qrCodePath = path.join(qrCodeDir, `payment_qr_${transactionId}.png`);
         
         const qrStream = fs.createWriteStream(qrCodePath);
         qrCodeImage.pipe(qrStream);
@@ -66,8 +73,8 @@ app.post("/create-upi-payment", async (req, res) => {
         qrStream.on("finish", () => {
             res.json({
                 success: true,
-                paymentLink,
-                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your IP address
+                paymentLink: upiLink,
+                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your domain
             });
         });
 
