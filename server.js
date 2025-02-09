@@ -49,14 +49,14 @@ app.post("/create-upi-payment", async (req, res) => {
             payment_capture: 1,
             method: "upi",
             upi: {
-                vpa: "your-upi-id@bank", // ✅ Replace with your UPI ID
+                vpa: "vprabhasivashankarsk-1@oksbi", // ✅ Replace with your UPI ID
             }
         });
 
         console.log("✅ UPI Order Created:", order);
 
         // ✅ Generate UPI Payment Link
-        const upiPaymentUrl = `upi://pay?pa=your-upi-id@bank&pn=VendMaster&mc=&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR`;
+        const upiPaymentUrl = `upi://pay?pa=vprabhasivashankarsk-1@oksbi&pn=VendMaster&mc=&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR`;
 
         console.log("✅ UPI Payment Link:", upiPaymentUrl);
 
@@ -71,7 +71,7 @@ app.post("/create-upi-payment", async (req, res) => {
             res.json({
                 success: true,
                 upiPaymentUrl,
-                qrCodeUrl: `https://your-server-url.com/qrcodes/${path.basename(qrCodePath)}`,
+                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`,
             });
         });
 
