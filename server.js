@@ -6,6 +6,7 @@ const qr = require("qr-image");
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const app = express();
 app.use(cors({ origin: "*" })); // Allow all origins for testing in a development environment
@@ -40,8 +41,9 @@ app.post("/create-upi-payment", async (req, res) => {
             return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
         }
 
+        // Validate Transaction Details
         if (!transactionId || !customerName) {
-            return res.status(400).json({ error: "Missing transaction details." });
+            return res.status(400).json({ error: "Missing transaction details. Please provide transactionId and customerName." });
         }
 
         console.log("🔹 Creating Razorpay payment for amount:", amount);
@@ -102,7 +104,6 @@ app.post("/razorpay-webhook", (req, res) => {
     });
 
     req.on('end', () => {
-        const crypto = require('crypto');
         const expectedSignature = crypto.createHmac('sha256', webhookSecret)
             .update(webhookBody)
             .digest('hex');
