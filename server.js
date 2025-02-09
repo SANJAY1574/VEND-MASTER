@@ -17,9 +17,6 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
-// ✅ Predefined amount (replace this with your amount)
-const predefinedAmount = 500; // Example: 500 INR
-
 // ✅ Helper function to generate QR code
 const generateQRCode = (upiLink) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
@@ -32,7 +29,7 @@ const asyncHandler = (fn) => (req, res, next) => {
 
 // ✅ Create Order & Generate UPI Payment Link
 app.post("/create-order", asyncHandler(async (req, res) => {
-    const amount = predefinedAmount;
+    const amount = 500; // Predefined amount (in INR)
 
     if (!amount || isNaN(amount) || amount <= 0) {
         return res.status(400).json({ error: "Invalid amount specified" });
