@@ -6,6 +6,7 @@ const qr = require("qr-image"); // QR Code generator
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto"); // For signature generation
 
 const app = express();
 app.use(cors({ origin: "*" })); // Allow all origins for testing in a development environment
@@ -95,7 +96,8 @@ app.post("/verify-payment", async (req, res) => {
             return res.status(400).json({ error: "Missing required payment details." });
         }
 
-        const generatedSignature = razorpay.utils.generateSignature(orderId, paymentId);
+        // ✅ Generate the signature manually
+        const generatedSignature = generateSignature(orderId, paymentId);
 
         // Verify the payment signature
         if (generatedSignature !== signature) {
@@ -115,6 +117,14 @@ app.post("/verify-payment", async (req, res) => {
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
+
+// ✅ Signature Generation Function
+function generateSignature(orderId, paymentId) {
+    const secret = process.env.RAZORPAY_SECRET_KEY;
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(orderId + "|" + paymentId);
+    return hmac.digest('hex');
+}
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
