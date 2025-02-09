@@ -41,25 +41,33 @@ app.post("/create-upi-payment", async (req, res) => {
 
         // ✅ Create Payment Link using Razorpay API
         const paymentLinkData = {
-            amount: Math.round(amount * 100), // Convert to paise
-            currency: "INR",
-            accept_partial: false,
-            description: "Payment for vending machine purchase",
-            customer: {
-                name: "Customer Name",
-                email: "customer@example.com",
-                contact: "9876543210",
-            },
-            notify: {
-                sms: true,
-                email: true,
-            },
-            reminder_enable: true,
-            expire_by: Math.floor(Date.now() / 1000) + 3600, // Link expires in 1 hour
-            reference_id: "txn_" + Date.now(),
-            callback_url: "https://vend-master.onrender.com/payment-success",
-            callback_method: "get",
-        };
+    amount: Math.round(amount * 100), // Convert to paise
+    currency: "INR",
+    accept_partial: false,
+    description: "Payment for vending machine purchase",
+    customer: {
+        name: "Customer Name",
+        email: "customer@example.com",
+        contact: "9876543210",
+    },
+    notify: {
+        sms: true,
+        email: true,
+    },
+    reminder_enable: true,
+    expire_by: Math.floor(Date.now() / 1000) + 3600, // Link expires in 1 hour
+    reference_id: "txn_" + Date.now(),
+    callback_url: "https://vend-master.onrender.com/payment-success",
+    callback_method: "get",
+    
+    // ✅ Add UPI Payment Method
+    options: {
+        upi: {
+            vpa: "vprabhasivashankarsk-1@oksbi"  // 🔹 Replace with a valid recipient UPI ID
+        }
+    }
+};
+
 
         const paymentLink = await razorpay.paymentLink.create(paymentLinkData);
 
