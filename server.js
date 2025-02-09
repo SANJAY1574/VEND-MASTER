@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
 // ✅ Check if API Keys are Set
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY || !process.env.UPI_RECIPIENT_ID) {
+if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY || !process.env.UPI_ID) {
     console.error("❌ ERROR: Missing Razorpay API Keys or UPI ID. Check your .env file.");
     process.exit(1);
 }
@@ -52,12 +52,12 @@ app.post("/create-upi-payment", async (req, res) => {
         console.log("✅ Razorpay Order Created:", order);
 
         // ✅ Generate UPI Payment Link using Valid Business UPI ID
-        const upiPaymentUrl = `upi://pay?pa=${process.env.UPI_RECIPIENT_ID}&pn=VendMaster&mc=0000&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR`;
+        const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent("VEND MASTER")}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
 
-        console.log("✅ UPI Payment Link:", upiPaymentUrl);
+        console.log("✅ UPI Payment Link:", upiPaymentLink);
 
         // ✅ Generate QR Code for UPI Payment
-        const qrCodeImage = qr.image(upiPaymentUrl, { type: "png" });
+        const qrCodeImage = qr.image(upiPaymentLink, { type: "png" });
         const qrCodePath = path.join(qrCodeDir, `payment_qr_${Date.now()}.png`);
         
         const qrStream = fs.createWriteStream(qrCodePath);
@@ -66,7 +66,7 @@ app.post("/create-upi-payment", async (req, res) => {
         qrStream.on("finish", () => {
             res.json({
                 success: true,
-                upiPaymentUrl,
+                upiPaymentUrl: upiPaymentLink,
                 qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your IP address
             });
         });
