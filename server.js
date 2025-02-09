@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const Razorpay = require("razorpay");
 const cors = require("cors");
-const qr = require("qr-image"); // For QR code generation
+const qr = require("qr-image"); // QR code generation
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
@@ -12,16 +12,7 @@ app.use(cors());
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// ✅ Ensure QR Code Directory Exists
-const qrCodeDir = path.join(__dirname, "qrcodes");
-if (!fs.existsSync(qrCodeDir)) {
-    fs.mkdirSync(qrCodeDir);
-}
-
-// ✅ Serve QR Code Directory Publicly
-app.use("/qrcodes", express.static(qrCodeDir));
-
-// ✅ Check if API Keys are Set
+// ✅ Ensure Razorpay API Keys Exist
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY) {
     console.error("❌ ERROR: Razorpay API Keys are missing. Check your .env file.");
     process.exit(1);
@@ -33,12 +24,24 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
+// ✅ Set Server URL from Environment
+const SERVER_URL = process.env.SERVER_URL || "http://localhost:5000";
+
+// ✅ Ensure QR Code Directory Exists
+const qrCodeDir = path.join(__dirname, "qrcodes");
+if (!fs.existsSync(qrCodeDir)) {
+    fs.mkdirSync(qrCodeDir);
+}
+
+// ✅ Serve QR Codes as Static Files
+app.use("/qrcodes", express.static(qrCodeDir));
+
 // ✅ Create Payment Link & Generate QR Code
 app.post("/create-payment-link", async (req, res) => {
     try {
         const { amount } = req.body;
 
-        // Validate Amount
+        // ✅ Validate Amount
         if (!amount || isNaN(amount) || amount <= 0) {
             return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
         }
@@ -53,32 +56,33 @@ app.post("/create-payment-link", async (req, res) => {
             customer: {
                 name: "Customer",
                 email: "customer@example.com",
-                contact: "1234567890",
+                contact: "1234567890", // ✅ Use a valid phone number format
             },
             notify: {
                 sms: true,
                 email: true,
             },
-            callback_url: "qwerty://payment-success", // Redirect after payment
+            callback_url: "qwerty://payment-success",
             callback_method: "get",
         });
 
         console.log("✅ Payment Link Created:", paymentLink.short_url);
 
         // ✅ Generate QR Code for the Payment Link
-        const qrFileName = `payment_qr_${Date.now()}.png`;
-        const qrCodePath = path.join(qrCodeDir, qrFileName);
-        const qrCodeUrl = `https://vend-master.onrender.com/qrcodes/${qrFileName}`; // 🔹 Public URL for Flutter
+        const qrCodeImage = qr.image(paymentLink.short_url, { type: "png" });
+        const qrCodeFileName = `payment_qr_${Date.now()}.png`;
+        const qrCodePath = path.join(qrCodeDir, qrCodeFileName);
 
         const qrStream = fs.createWriteStream(qrCodePath);
-        qr.image(paymentLink.short_url, { type: "png" }).pipe(qrStream);
+        qrCodeImage.pipe(qrStream);
 
         qrStream.on("finish", () => {
-            console.log("✅ QR Code Saved:", qrCodeUrl);
+            const qrCodeUrl = `${SERVER_URL}/qrcodes/${qrCodeFileName}`; // ✅ Public URL for QR Code
+
             res.json({
                 success: true,
                 paymentLink: paymentLink.short_url,
-                qrCodeUrl, // ✅ Public URL instead of local path
+                qrCodeUrl, // ✅ Send a full URL, not a file path
             });
         });
 
