@@ -59,9 +59,10 @@ app.post("/create-payment-link", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error creating payment link:", error);
-        res.status(500).json({ error: "Internal Server Error" });
-    }
+    console.error("❌ Error creating payment link:", error.response?.data || error.message || error);
+    res.status(500).json({ error: error.response?.data || "Internal Server Error" });
+}
+
 });
 
 // ✅ Start Server
