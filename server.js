@@ -37,6 +37,7 @@ if (!fs.existsSync(qrCodeDir)) {
 app.use("/qrcodes", express.static(qrCodeDir));
 
 // ✅ Create Payment Link & Generate QR Code
+// ✅ Create Payment Link & Generate QR Code
 app.post("/create-payment-link", async (req, res) => {
     try {
         const { amount } = req.body;
@@ -56,7 +57,7 @@ app.post("/create-payment-link", async (req, res) => {
             customer: {
                 name: "Customer",
                 email: "customer@example.com",
-                contact: "1234567890", // ✅ Use a valid phone number format
+                contact: "6384733399", // ✅ Use a valid phone number format
             },
             notify: {
                 sms: true,
@@ -73,16 +74,19 @@ app.post("/create-payment-link", async (req, res) => {
         const qrCodeFileName = `payment_qr_${Date.now()}.png`;
         const qrCodePath = path.join(qrCodeDir, qrCodeFileName);
 
+        // ✅ Write QR Code to File
         const qrStream = fs.createWriteStream(qrCodePath);
         qrCodeImage.pipe(qrStream);
 
         qrStream.on("finish", () => {
-            const qrCodeUrl = `${SERVER_URL}/qrcodes/${qrCodeFileName}`; // ✅ Public URL for QR Code
+            const qrCodeUrl = `${SERVER_URL}/qrcodes/${qrCodeFileName}`; // ✅ Corrected QR Code URL
+
+            console.log("✅ QR Code Generated:", qrCodeUrl);
 
             res.json({
                 success: true,
                 paymentLink: paymentLink.short_url,
-                qrCodeUrl, // ✅ Send a full URL, not a file path
+                qrCodeUrl, // ✅ Fixed null issue
             });
         });
 
@@ -96,6 +100,7 @@ app.post("/create-payment-link", async (req, res) => {
         res.status(500).json({ error: error.response?.data || "Internal Server Error" });
     }
 });
+
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
