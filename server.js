@@ -31,24 +31,31 @@ if (!fs.existsSync(qrCodeDir)) {
 }
 
 // ✅ Create UPI Payment & Generate QR Code
-app.post("/create-upi-payment", async (req, res) => {
+app.post("/verify-payment", async (req, res) => {
     try {
-        const { amount } = req.body;
-
-        // Validate Amount
-        if (!amount || isNaN(amount) || amount <= 0) {
-            return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
+        const { payment_id } = req.body;
+        
+        if (!payment_id) {
+            return res.status(400).json({ success: false, error: "Missing payment ID" });
         }
 
-        console.log("🔹 Creating UPI payment for amount:", amount);
+        // ✅ Call Razorpay API to Fetch Payment Details
+        const payment = await razorpay.payments.fetch(payment_id);
 
-        // ✅ Create Razorpay Order
-        const order = await razorpay.orders.create({
-            amount: Math.round(amount * 100), // Convert to paise
-            currency: "INR",
-            payment_capture: 1, // Auto-capture payment after success
-            method: "upi", // ✅ Specify UPI as the payment method
-        });
+        console.log("🔍 Payment Details:", payment);
+
+        if (payment.status === "captured") {
+            res.json({ success: true, message: "Payment Successful", payment });
+        } else {
+            res.json({ success: false, message: "Payment Not Completed", payment });
+        }
+
+    } catch (error) {
+        console.error("❌ Error verifying payment:", error.response?.data || error.message);
+        res.status(500).json({ success: false, error: "Internal Server Error" });
+    }
+});
+
 
         console.log("✅ Razorpay Order Created:", order);
 
