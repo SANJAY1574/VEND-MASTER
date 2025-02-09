@@ -1,23 +1,15 @@
 require("dotenv").config();
 const express = require("express");
 const Razorpay = require("razorpay");
-const cors = require("cors");
-const qr = require("qr-image");
-const bodyParser = require("body-parser");
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
+const cors = require("cors");
+const bodyParser = require("body-parser");
+const axios = require("axios");
 
 const app = express();
-app.use(cors({ origin: "*" })); // Allow all origins for testing in a development environment
+app.use(cors());
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
-
-// ✅ Check if API Keys are Set
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY) {
-    console.error("❌ ERROR: Missing Razorpay API Keys. Check your .env file.");
-    process.exit(1);
-}
 
 // ✅ Initialize Razorpay
 const razorpay = new Razorpay({
@@ -25,108 +17,148 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
-// ✅ Ensure QR Code Directory Exists
-const qrCodeDir = path.join(__dirname, "qrcodes");
-if (!fs.existsSync(qrCodeDir)) {
-    fs.mkdirSync(qrCodeDir);
-}
+// ✅ Predefined amount
+const predefinedAmount = 1000; // Amount in INR (i.e., 1000 INR)
 
-// ✅ Create Razorpay Order & Generate UPI Payment Link with QR Code
-app.post("/create-upi-payment", async (req, res) => {
-    try {
-        const { amount, transactionId, customerName } = req.body;
+// ✅ Helper function to generate QR code
+const generateQRCode = (upiLink) => {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}`;
+};
 
-        // Validate Amount
-        if (!amount || isNaN(amount) || amount <= 0) {
-            return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
-        }
+// ✅ Async error handler middleware
+const asyncHandler = (fn) => (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+};
 
-        // Validate Transaction Details
-        if (!transactionId || !customerName) {
-            return res.status(400).json({ error: "Missing transaction details. Please provide transactionId and customerName." });
-        }
+// ✅ Create Order & Generate UPI Payment Link
+app.post("/create-order", asyncHandler(async (req, res) => {
+    // Use predefined amount instead of user input
+    const amount = predefinedAmount;
 
-        console.log("🔹 Creating Razorpay payment for amount:", amount);
-
-        // ✅ Create Razorpay Order
-        const order = await razorpay.orders.create({
-            amount: Math.round(amount * 100), // Convert to paise
-            currency: "INR",
-            payment_capture: 1, // Auto-capture payment after success
-        });
-
-        console.log("✅ Razorpay Order Created:", order);
-
-        // ✅ Generate UPI Payment Link
-        const payeeAddress = "vprabhasivashankarsk-1@oksbi"; // Replace with your UPI ID
-        const payeeName = "Your Name"; // Replace with your name/business name
-        const transactionNote = `Payment for Order #${transactionId}`; // Custom note for the payment
-        const currency = "INR"; // Currency type
-        
-        const upiLink = `upi://pay?pa=${payeeAddress}&pn=${payeeName}&tid=${transactionId}&tn=${transactionNote}&am=${amount}&cu=${currency}`;
-
-        // ✅ Generate QR Code for UPI Link
-        const qrCodeImage = qr.image(upiLink, { type: "png" });
-        const qrCodePath = path.join(qrCodeDir, `payment_qr_${transactionId}.png`);
-        
-        const qrStream = fs.createWriteStream(qrCodePath);
-        qrCodeImage.pipe(qrStream);
-
-        qrStream.on("finish", () => {
-            res.json({
-                success: true,
-                paymentLink: upiLink,
-                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your domain
-            });
-        });
-
-        qrStream.on("error", (err) => {
-            console.error("❌ Error writing QR code file:", err);
-            res.status(500).json({ error: "Failed to generate QR code." });
-        });
-
-    } catch (error) {
-        console.error("❌ Error creating Razorpay payment:", error.response?.data || error.message || error);
-        res.status(500).json({ error: "Internal Server Error" });
+    if (!amount || isNaN(amount) || amount <= 0) {
+        return res.status(400).json({ error: "Invalid amount specified" });
     }
-});
 
-// ✅ Serve QR Code Images
-app.use("/qrcodes", express.static(qrCodeDir));
+    // ✅ Create Razorpay Order
+    const options = {
+        amount: amount * 100, // Amount in paise
+        currency: "INR",
+        receipt: "order_" + Date.now(),
+        payment_capture: 1, // Auto capture
+    };
 
-// ✅ Webhook for Payment Verification
-app.post("/razorpay-webhook", (req, res) => {
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const order = await razorpay.orders.create(options);
 
-    let webhookBody = '';
-    req.on('data', chunk => {
-        webhookBody += chunk;
+    // ✅ Generate UPI Payment Link
+    const upiPaymentLink = `upi://pay?pa=${process.env.UPI_ID}&pn=${encodeURIComponent("VEND MASTER")}&tn=${encodeURIComponent("Vending Machine Payment")}&am=${amount}&cu=INR`;
+
+    // ✅ Generate QR Code for UPI Payment
+    const qrCodeURL = generateQRCode(upiPaymentLink);
+
+    console.log(`✅ Order Created: ${order.id}`);
+
+    // ✅ Send order details, UPI link & QR code
+    res.json({
+        success: true,
+        order_id: order.id,
+        upiPaymentLink,
+        qrCodeURL,
     });
+}));
 
-    req.on('end', () => {
-        const expectedSignature = crypto.createHmac('sha256', webhookSecret)
-            .update(webhookBody)
-            .digest('hex');
+// ✅ Verify and Capture Payment (On-Demand Verification)
+app.post("/verify-payment", asyncHandler(async (req, res) => {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-        const actualSignature = req.headers['x-razorpay-signature'];
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        return res.status(400).json({ error: "Missing payment details" });
+    }
 
-        if (expectedSignature === actualSignature) {
-            const payload = JSON.parse(webhookBody);
-            const paymentDetails = payload.payload.payment.entity;
+    // ✅ Verify payment signature
+    const generatedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_SECRET_KEY)
+        .update(razorpay_order_id + "|" + razorpay_payment_id)
+        .digest("hex");
 
-            // Check if the payment is successful
-            if (paymentDetails.status === 'captured') {
-                console.log('✅ Payment captured:', paymentDetails);
-                res.status(200).send('Payment received successfully');
-            } else {
-                console.log('❌ Payment failed');
-                res.status(400).send('Payment verification failed');
-            }
-        } else {
-            console.log('❌ Invalid signature');
-            res.status(400).send('Invalid signature');
+    if (generatedSignature !== razorpay_signature) {
+        return res.status(400).json({ error: "Invalid payment signature" });
+    }
+
+    // ✅ Fetch payment details from Razorpay
+    console.log(`🔍 Checking payment details for Payment ID: ${razorpay_payment_id}`);
+
+    const paymentDetails = await axios.get(
+        `https://api.razorpay.com/v1/payments/${razorpay_payment_id}`,
+        {
+            auth: {
+                username: process.env.RAZORPAY_KEY_ID,
+                password: process.env.RAZORPAY_SECRET_KEY,
+            },
         }
-    });
+    );
+
+    console.log("📝 Payment Details Response:", paymentDetails.data);
+
+    const payment = paymentDetails.data;
+    const paymentStatus = payment.status;
+
+    if (paymentStatus === "captured") {
+        return res.json({
+            success: true,
+            status: "Success",
+            message: "Payment Captured Successfully!",
+            payment_id: razorpay_payment_id,
+        });
+    } else {
+        return res.json({
+            success: false,
+            status: paymentStatus,
+            message: "Payment Pending or Failed!",
+        });
+    }
+}));
+
+// ✅ Webhook for Automatic Payment Capture
+app.post("/webhook", asyncHandler(async (req, res) => {
+    const payload = req.body;
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const signature = req.headers["x-razorpay-signature"];
+
+    console.log("🔔 Webhook triggered:", payload.event);
+
+    // Generate Expected Signature
+    const generatedSignature = crypto
+        .createHmac("sha256", webhookSecret)
+        .update(JSON.stringify(payload))
+        .digest("hex");
+
+    if (signature !== generatedSignature) {
+        console.warn("❌ Invalid Webhook Signature");
+        return res.status(400).json({ error: "Invalid signature" });
+    }
+
+    // Check for payment.captured event
+    if (payload.event === "payment.captured") {
+        const paymentId = payload.payload.payment.entity.id;
+        console.log(`✅ Payment Captured via Webhook: ${paymentId}`);
+        // Here, you can mark the payment as successful in your system
+        return res.json({ status: "success" });
+    }
+
+    res.status(400).json({ error: "Unhandled webhook event" });
+}));
+
+// ✅ Get Order Status
+app.get("/order-status/:orderId", asyncHandler(async (req, res) => {
+    const { orderId } = req.params;
+    const order = await razorpay.orders.fetch(orderId);
+    res.json({ success: true, order });
+}));
+
+// ✅ Error Handling Middleware
+app.use((err, req, res, next) => {
+    console.error("❌ Server Error:", err.message);
+    res.status(500).json({ error: "Internal Server Error" });
 });
 
 // ✅ Start Server
