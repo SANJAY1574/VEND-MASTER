@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const Razorpay = require("razorpay");
 const cors = require("cors");
-const qr = require("qr-image"); // QR code generation
+const qr = require("qr-image"); // For QR code generation
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-// ✅ Ensure Razorpay API Keys Exist
+// ✅ Check if API Keys are Set
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY) {
     console.error("❌ ERROR: Razorpay API Keys are missing. Check your .env file.");
     process.exit(1);
@@ -24,69 +24,54 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
-// ✅ Set Server URL from Environment
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:5000";
-
 // ✅ Ensure QR Code Directory Exists
 const qrCodeDir = path.join(__dirname, "qrcodes");
 if (!fs.existsSync(qrCodeDir)) {
     fs.mkdirSync(qrCodeDir);
 }
 
-// ✅ Serve QR Codes as Static Files
-app.use("/qrcodes", express.static(qrCodeDir));
-
-// ✅ Create Payment Link & Generate QR Code
-// ✅ Create Payment Link & Generate QR Code
-app.post("/create-payment-link", async (req, res) => {
+// ✅ Create UPI Payment & Generate QR Code
+app.post("/create-upi-payment", async (req, res) => {
     try {
         const { amount } = req.body;
 
-        // ✅ Validate Amount
+        // Validate Amount
         if (!amount || isNaN(amount) || amount <= 0) {
             return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
         }
 
-        console.log("🔹 Creating payment link for amount:", amount);
+        console.log("🔹 Creating UPI payment for amount:", amount);
 
-        // ✅ Create Razorpay Payment Link
-        const paymentLink = await razorpay.paymentLink.create({
+        // ✅ Create Razorpay Order for UPI Payment
+        const order = await razorpay.orders.create({
             amount: Math.round(amount * 100), // Convert to paise
             currency: "INR",
-            description: "Vending Machine Payment",
-            customer: {
-                name: "Customer",
-                email: "customer@example.com",
-                contact: "6384733399", // ✅ Use a valid phone number format
-            },
-            notify: {
-                sms: true,
-                email: true,
-            },
-            callback_url: "qwerty://payment-success",
-            callback_method: "get",
+            payment_capture: 1,
+            method: "upi",
+            upi: {
+                vpa: "your-upi-id@bank", // ✅ Replace with your UPI ID
+            }
         });
 
-        console.log("✅ Payment Link Created:", paymentLink.short_url);
+        console.log("✅ UPI Order Created:", order);
 
-        // ✅ Generate QR Code for the Payment Link
-        const qrCodeImage = qr.image(paymentLink.short_url, { type: "png" });
-        const qrCodeFileName = `payment_qr_${Date.now()}.png`;
-        const qrCodePath = path.join(qrCodeDir, qrCodeFileName);
+        // ✅ Generate UPI Payment Link
+        const upiPaymentUrl = `upi://pay?pa=your-upi-id@bank&pn=VendMaster&mc=&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR`;
 
-        // ✅ Write QR Code to File
+        console.log("✅ UPI Payment Link:", upiPaymentUrl);
+
+        // ✅ Generate QR Code for UPI Payment
+        const qrCodeImage = qr.image(upiPaymentUrl, { type: "png" });
+        const qrCodePath = path.join(qrCodeDir, `payment_qr_${Date.now()}.png`);
+        
         const qrStream = fs.createWriteStream(qrCodePath);
         qrCodeImage.pipe(qrStream);
 
         qrStream.on("finish", () => {
-            const qrCodeUrl = `${SERVER_URL}/qrcodes/${qrCodeFileName}`; // ✅ Corrected QR Code URL
-
-            console.log("✅ QR Code Generated:", qrCodeUrl);
-
             res.json({
                 success: true,
-                paymentLink: paymentLink.short_url,
-                qrCodeUrl, // ✅ Fixed null issue
+                upiPaymentUrl,
+                qrCodeUrl: `https://your-server-url.com/qrcodes/${path.basename(qrCodePath)}`,
             });
         });
 
@@ -96,11 +81,13 @@ app.post("/create-payment-link", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error creating payment link:", error.response?.data || error.message || error);
+        console.error("❌ Error creating UPI payment:", error.response?.data || error.message || error);
         res.status(500).json({ error: error.response?.data || "Internal Server Error" });
     }
 });
 
+// ✅ Serve QR Code Images
+app.use("/qrcodes", express.static(qrCodeDir));
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
