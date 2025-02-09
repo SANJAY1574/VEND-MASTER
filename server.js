@@ -6,6 +6,7 @@ const qr = require("qr-image"); // QR Code generator
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto"); // Added for signature generation and verification
 
 const app = express();
 app.use(cors({ origin: "*" })); // Allow all origins for testing in a development environment
@@ -88,7 +89,6 @@ app.post("/create-upi-payment", async (req, res) => {
 app.use("/qrcodes", express.static(qrCodeDir));
 
 // ✅ Payment Verification Endpoint
-// ✅ Payment Verification Endpoint
 app.post("/verify-payment", async (req, res) => {
     try {
         const { paymentId, orderId, signature } = req.body;
@@ -99,8 +99,11 @@ app.post("/verify-payment", async (req, res) => {
         }
 
         // Generate Razorpay Signature using orderId and paymentId
-        const generatedSignature = razorpay.utils.generateSignature(orderId, paymentId);
-        
+        const generatedSignature = crypto
+            .createHmac("sha256", process.env.RAZORPAY_SECRET_KEY)
+            .update(orderId + "|" + paymentId)
+            .digest("hex");
+
         console.log("Generated Signature:", generatedSignature);
         console.log("Received Signature:", signature);
 
@@ -122,7 +125,6 @@ app.post("/verify-payment", async (req, res) => {
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
-
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
