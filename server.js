@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const Razorpay = require("razorpay");
 const cors = require("cors");
-const qr = require("qr-image"); // QR Code generator
+const qr = require("qr-image");
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
@@ -13,8 +13,8 @@ app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
 // ✅ Check if API Keys are Set
-if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY || !process.env.UPI_RECIPIENT_ID) {
-    console.error("❌ ERROR: Missing Razorpay API Keys or UPI ID. Check your .env file.");
+if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY) {
+    console.error("❌ ERROR: Missing Razorpay API Keys. Check your .env file.");
     process.exit(1);
 }
 
@@ -30,7 +30,7 @@ if (!fs.existsSync(qrCodeDir)) {
     fs.mkdirSync(qrCodeDir);
 }
 
-// ✅ Create UPI Payment & Generate QR Code
+// ✅ Create Razorpay Order & Generate Payment Link with QR Code
 app.post("/create-upi-payment", async (req, res) => {
     try {
         const { amount } = req.body;
@@ -40,9 +40,9 @@ app.post("/create-upi-payment", async (req, res) => {
             return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
         }
 
-        console.log("🔹 Creating UPI payment for amount:", amount);
+        console.log("🔹 Creating Razorpay payment for amount:", amount);
 
-        // ✅ Create Razorpay Order (No need to specify UPI manually)
+        // ✅ Create Razorpay Order
         const order = await razorpay.orders.create({
             amount: Math.round(amount * 100), // Convert to paise
             currency: "INR",
@@ -51,13 +51,13 @@ app.post("/create-upi-payment", async (req, res) => {
 
         console.log("✅ Razorpay Order Created:", order);
 
-        // ✅ Generate UPI Payment Link using Valid Business UPI ID
-        const upiPaymentUrl = `upi://pay?pa=${process.env.UPI_RECIPIENT_ID}&pn=VendMaster&mc=&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR`;
+        // ✅ Generate Payment Link (Razorpay's Checkout page automatically handles payments)
+        const paymentLink = `https://checkout.razorpay.com/v1/checkout.js?order_id=${order.id}`;
 
-        console.log("✅ UPI Payment Link:", upiPaymentUrl);
+        console.log("✅ Razorpay Payment Link:", paymentLink);
 
-        // ✅ Generate QR Code for UPI Payment
-        const qrCodeImage = qr.image(upiPaymentUrl, { type: "png" });
+        // ✅ Generate QR Code for Payment Link
+        const qrCodeImage = qr.image(paymentLink, { type: "png" });
         const qrCodePath = path.join(qrCodeDir, `payment_qr_${Date.now()}.png`);
         
         const qrStream = fs.createWriteStream(qrCodePath);
@@ -66,8 +66,8 @@ app.post("/create-upi-payment", async (req, res) => {
         qrStream.on("finish", () => {
             res.json({
                 success: true,
-                upiPaymentUrl,
-                qrCodeUrl: `https://your-domain.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your actual domain/IP
+                paymentLink,
+                qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`, // Replace with your IP address
             });
         });
 
@@ -77,7 +77,7 @@ app.post("/create-upi-payment", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error creating UPI payment:", error.response?.data || error.message || error);
+        console.error("❌ Error creating Razorpay payment:", error.response?.data || error.message || error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
@@ -85,47 +85,41 @@ app.post("/create-upi-payment", async (req, res) => {
 // ✅ Serve QR Code Images
 app.use("/qrcodes", express.static(qrCodeDir));
 
-// ✅ Payment Verification Endpoint
-app.post("/verify-payment", async (req, res) => {
-    try {
-        const { paymentId, orderId, signature } = req.body;
+// ✅ Webhook for Payment Verification
+app.post("/razorpay-webhook", (req, res) => {
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
-        // Validate required fields
-        if (!paymentId || !orderId || !signature) {
-            return res.status(400).json({ error: "Missing required payment details." });
-        }
+    let webhookBody = '';
+    req.on('data', chunk => {
+        webhookBody += chunk;
+    });
 
-        // ✅ Generate the signature manually
-        const generatedSignature = generateSignature(orderId, paymentId);
+    req.on('end', () => {
+        const crypto = require('crypto');
+        const expectedSignature = crypto.createHmac('sha256', webhookSecret)
+            .update(webhookBody)
+            .digest('hex');
 
-        // Verify the payment signature
-        if (generatedSignature !== signature) {
-            return res.status(400).json({ error: "Invalid payment signature. Verification failed." });
-        }
+        const actualSignature = req.headers['x-razorpay-signature'];
 
-        // ✅ Fetch payment details from Razorpay
-        const paymentDetails = await razorpay.payments.fetch(paymentId);
+        if (expectedSignature === actualSignature) {
+            const payload = JSON.parse(webhookBody);
+            const paymentDetails = payload.payload.payment.entity;
 
-        if (paymentDetails.status === "captured") {
-            res.json({ success: true, message: "Payment verified successfully." });
+            // Check if the payment is successful
+            if (paymentDetails.status === 'captured') {
+                console.log('✅ Payment captured:', paymentDetails);
+                res.status(200).send('Payment received successfully');
+            } else {
+                console.log('❌ Payment failed');
+                res.status(400).send('Payment verification failed');
+            }
         } else {
-            return res.status(400).json({
-                error: "Payment not captured. Please check the payment status and try again.",
-                refundMessage: "The payment has not been captured. Please ensure the payment was successful."
-            });
+            console.log('❌ Invalid signature');
+            res.status(400).send('Invalid signature');
         }
-    } catch (error) {
-        console.error("❌ Error verifying payment:", error.response?.data || error.message || error);
-        res.status(500).json({ error: "Internal Server Error" });
-    }
+    });
 });
-
-// ✅ Helper function to generate signature for verification
-function generateSignature(orderId, paymentId) {
-    const hmac = require('crypto').createHmac('sha256', process.env.RAZORPAY_SECRET_KEY);
-    hmac.update(orderId + "|" + paymentId);
-    return hmac.digest('hex');
-}
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
