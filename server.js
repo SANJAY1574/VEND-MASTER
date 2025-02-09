@@ -50,7 +50,7 @@ app.post("/create-payment-link", async (req, res) => {
             customer: {
                 name: "Customer",
                 email: "customer@example.com",
-                contact: "9999999999",
+                contact: "6384733399",
             },
             notify: {
                 sms: true,
