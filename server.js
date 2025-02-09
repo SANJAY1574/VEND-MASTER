@@ -31,6 +31,7 @@ const asyncHandler = (fn) => (req, res, next) => {
 };
 
 // ✅ Create Order & Generate UPI Payment Link
+// ✅ Create Order & Generate UPI Payment Link
 app.post("/create-order", asyncHandler(async (req, res) => {
     // Use predefined amount instead of user input
     const amount = predefinedAmount;
@@ -65,6 +66,7 @@ app.post("/create-order", asyncHandler(async (req, res) => {
         qrCodeURL,
     });
 }));
+
 
 // ✅ Verify and Capture Payment (On-Demand Verification)
 app.post("/verify-payment", asyncHandler(async (req, res) => {
