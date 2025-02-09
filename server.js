@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const Razorpay = require("razorpay");
 const cors = require("cors");
-const qr = require("qr-image"); // For QR code generation
+const qr = require("qr-image");
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
@@ -30,39 +30,33 @@ if (!fs.existsSync(qrCodeDir)) {
     fs.mkdirSync(qrCodeDir);
 }
 
-// ✅ Create UPI Payment & Generate QR Code
-// ✅ Create UPI Payment & Generate QR Code
+// ✅ Create Razorpay Order & Generate Payment QR Code
 app.post("/create-upi-payment", async (req, res) => {
     try {
         const { amount } = req.body;
 
+        // Validate Amount
         if (!amount || isNaN(amount) || amount <= 0) {
             return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
         }
 
-        console.log("🔹 Creating UPI payment for amount:", amount);
+        console.log("🔹 Creating Razorpay order for amount:", amount);
 
+        // ✅ Create Razorpay Order
         const order = await razorpay.orders.create({
             amount: Math.round(amount * 100), // Convert to paise
             currency: "INR",
             payment_capture: 1,
-            method: "upi",
-            upi: {
-                vpa: "vprabhasivashankarsk-1@oksbi", // ✅ Replace with your UPI ID
-            }
         });
 
-        if (!order) {
-            throw new Error("Failed to create Razorpay order.");
-        }
+        console.log("✅ Razorpay Order Created:", order);
 
-        console.log("✅ UPI Order Created:", order);
+        // ✅ Generate Payment Link
+        const paymentLink = `https://rzp.io/i/${order.id}`;
+        console.log("✅ Razorpay Payment Link:", paymentLink);
 
-        const upiPaymentUrl = `upi://pay?pa=vprabhasivashankarsk-1@oksbi&pn=VendMaster&mc=&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR`;
-
-        console.log("✅ UPI Payment Link:", upiPaymentUrl);
-
-        const qrCodeImage = qr.image(upiPaymentUrl, { type: "png" });
+        // ✅ Generate QR Code for Payment
+        const qrCodeImage = qr.image(paymentLink, { type: "png" });
         const qrCodePath = path.join(qrCodeDir, `payment_qr_${Date.now()}.png`);
 
         const qrStream = fs.createWriteStream(qrCodePath);
@@ -71,7 +65,7 @@ app.post("/create-upi-payment", async (req, res) => {
         qrStream.on("finish", () => {
             res.json({
                 success: true,
-                upiPaymentUrl,
+                paymentLink,
                 qrCodeUrl: `https://vend-master.onrender.com/qrcodes/${path.basename(qrCodePath)}`,
             });
         });
@@ -82,17 +76,10 @@ app.post("/create-upi-payment", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error creating UPI payment:", error);
-
-        // Return error message from Razorpay if available
-        if (error.response && error.response.data) {
-            return res.status(500).json({ error: error.response.data });
-        }
-
-        res.status(500).json({ error: "Internal Server Error" });
+        console.error("❌ Error creating Razorpay payment:", error.response?.data || error.message || error);
+        res.status(500).json({ error: error.response?.data || "Internal Server Error" });
     }
 });
-
 
 // ✅ Serve QR Code Images
 app.use("/qrcodes", express.static(qrCodeDir));
