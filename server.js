@@ -86,6 +86,7 @@ app.post("/create-upi-payment", async (req, res) => {
 app.use("/qrcodes", express.static(qrCodeDir));
 
 // ✅ Payment Verification Endpoint
+// ✅ Payment Verification Endpoint
 app.post("/verify-payment", async (req, res) => {
     try {
         const { paymentId, orderId, signature } = req.body;
@@ -95,14 +96,17 @@ app.post("/verify-payment", async (req, res) => {
             return res.status(400).json({ error: "Missing required payment details." });
         }
 
-        const generatedSignature = razorpay.utils.generateSignature(orderId, paymentId);
+        // Razorpay's method to verify the signature
+        const body = orderId + "|" + paymentId;
 
-        // Verify the payment signature
-        if (generatedSignature !== signature) {
-            return res.status(400).json({ error: "Invalid payment signature. Verification failed." });
-        }
+        // Using Razorpay's verifyPaymentSignature method
+        razorpay.orders.verifyPaymentSignature({
+            order_id: orderId,
+            payment_id: paymentId,
+            signature: signature,
+        });
 
-        // Payment is verified, proceed to check payment status
+        // ✅ Fetch Payment Details from Razorpay
         const paymentDetails = await razorpay.payments.fetch(paymentId);
 
         if (paymentDetails.status === "captured") {
@@ -114,7 +118,7 @@ app.post("/verify-payment", async (req, res) => {
         console.error("❌ Error verifying payment:", error.response?.data || error.message || error);
         res.status(500).json({ error: "Internal Server Error" });
     }
-});
+};
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
