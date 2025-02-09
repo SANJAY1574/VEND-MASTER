@@ -31,18 +31,17 @@ if (!fs.existsSync(qrCodeDir)) {
 }
 
 // ✅ Create UPI Payment & Generate QR Code
+// ✅ Create UPI Payment & Generate QR Code
 app.post("/create-upi-payment", async (req, res) => {
     try {
         const { amount } = req.body;
 
-        // Validate Amount
         if (!amount || isNaN(amount) || amount <= 0) {
             return res.status(400).json({ error: "Invalid amount specified. Amount must be a positive number." });
         }
 
         console.log("🔹 Creating UPI payment for amount:", amount);
 
-        // ✅ Create Razorpay Order for UPI Payment
         const order = await razorpay.orders.create({
             amount: Math.round(amount * 100), // Convert to paise
             currency: "INR",
@@ -53,17 +52,19 @@ app.post("/create-upi-payment", async (req, res) => {
             }
         });
 
+        if (!order) {
+            throw new Error("Failed to create Razorpay order.");
+        }
+
         console.log("✅ UPI Order Created:", order);
 
-        // ✅ Generate UPI Payment Link
         const upiPaymentUrl = `upi://pay?pa=vprabhasivashankarsk-1@oksbi&pn=VendMaster&mc=&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR`;
 
         console.log("✅ UPI Payment Link:", upiPaymentUrl);
 
-        // ✅ Generate QR Code for UPI Payment
         const qrCodeImage = qr.image(upiPaymentUrl, { type: "png" });
         const qrCodePath = path.join(qrCodeDir, `payment_qr_${Date.now()}.png`);
-        
+
         const qrStream = fs.createWriteStream(qrCodePath);
         qrCodeImage.pipe(qrStream);
 
@@ -81,10 +82,17 @@ app.post("/create-upi-payment", async (req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error creating UPI payment:", error.response?.data || error.message || error);
-        res.status(500).json({ error: error.response?.data || "Internal Server Error" });
+        console.error("❌ Error creating UPI payment:", error);
+
+        // Return error message from Razorpay if available
+        if (error.response && error.response.data) {
+            return res.status(500).json({ error: error.response.data });
+        }
+
+        res.status(500).json({ error: "Internal Server Error" });
     }
 });
+
 
 // ✅ Serve QR Code Images
 app.use("/qrcodes", express.static(qrCodeDir));
