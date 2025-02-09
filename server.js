@@ -21,24 +21,29 @@ const PREDEFINED_AMOUNT = 1; // Amount in INR
 // ✅ Create Order & Generate QR Code
 app.post("/create-order", async (req, res) => {
     try {
-        // ✅ Step 1: Create a Razorpay Order
+        // ✅ Step 1: Create a Razorpay Order with UPI ID
         const order = await razorpay.orders.create({
             amount: PREDEFINED_AMOUNT * 100, // Amount in paise
             currency: "INR",
             receipt: "order_" + Date.now(),
             payment_capture: 1, // Auto capture
+            method: "upi",
+            upi: {
+                vpa: "vprabhasivashankarsk-1@oksbi" // ✅ Replace with your actual UPI ID
+            }
         });
 
         console.log(`✅ Order Created: ${order.id}`);
 
         // ✅ Step 2: Generate QR Code from Razorpay API
-        const qrCode = await razorpay.qrCode.create({
+        const qrCode = await razorpay.qrCodes.create({
             type: "upi_qr",
             name: "Vend Master Payment",
             usage: "single_use",
             fixed_amount: true,
             payment_amount: PREDEFINED_AMOUNT * 100, // Amount in paise
             description: "Payment for vending machine",
+            order_id: order.id, // ✅ Link the QR code to the order
         });
 
         console.log(`✅ QR Code Generated: ${qrCode.id}`);
