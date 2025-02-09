@@ -17,8 +17,8 @@ const razorpay = new Razorpay({
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
 
-// ✅ Predefined amount
-const predefinedAmount = 1000; // Amount in INR (i.e., 1000 INR)
+// ✅ Predefined amount (replace this with your amount)
+const predefinedAmount = 500; // Example: 500 INR
 
 // ✅ Helper function to generate QR code
 const generateQRCode = (upiLink) => {
@@ -31,9 +31,7 @@ const asyncHandler = (fn) => (req, res, next) => {
 };
 
 // ✅ Create Order & Generate UPI Payment Link
-// ✅ Create Order & Generate UPI Payment Link
 app.post("/create-order", asyncHandler(async (req, res) => {
-    // Use predefined amount instead of user input
     const amount = predefinedAmount;
 
     if (!amount || isNaN(amount) || amount <= 0) {
@@ -66,7 +64,6 @@ app.post("/create-order", asyncHandler(async (req, res) => {
         qrCodeURL,
     });
 }));
-
 
 // ✅ Verify and Capture Payment (On-Demand Verification)
 app.post("/verify-payment", asyncHandler(async (req, res) => {
