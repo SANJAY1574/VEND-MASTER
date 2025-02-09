@@ -110,17 +110,22 @@ app.post("/verify-payment", async (req, res) => {
 
         if (paymentDetails.status === "captured") {
             res.json({ success: true, message: "Payment verified successfully." });
+        } else if (paymentDetails.status === "failed") {
+            res.status(400).json({
+                error: "Payment failed. Please check your payment method and try again.",
+            });
         } else {
-            return res.status(400).json({
-                error: "Payment not captured. Please check the payment status and try again.",
-                refundMessage: "The payment has not been captured. Please ensure the payment was successful."
+            res.status(400).json({
+                error: "Payment status is not captured. Please try again later.",
+                refundMessage: "Your money will be refunded if the payment does not go through."
             });
         }
     } catch (error) {
-        console.error("❌ Error verifying payment:", error.response?.data || error.message || error);
+        console.error("❌ Error verifying payment:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
+
 
 // ✅ Helper function to generate signature for verification
 function generateSignature(orderId, paymentId) {
