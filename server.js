@@ -12,6 +12,15 @@ app.use(cors());
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
+// ✅ Ensure QR Code Directory Exists
+const qrCodeDir = path.join(__dirname, "qrcodes");
+if (!fs.existsSync(qrCodeDir)) {
+    fs.mkdirSync(qrCodeDir);
+}
+
+// ✅ Serve QR Code Directory Publicly
+app.use("/qrcodes", express.static(qrCodeDir));
+
 // ✅ Check if API Keys are Set
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_SECRET_KEY) {
     console.error("❌ ERROR: Razorpay API Keys are missing. Check your .env file.");
@@ -23,12 +32,6 @@ const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
     key_secret: process.env.RAZORPAY_SECRET_KEY,
 });
-
-// ✅ Ensure QR Code Directory Exists
-const qrCodeDir = path.join(__dirname, "qrcodes");
-if (!fs.existsSync(qrCodeDir)) {
-    fs.mkdirSync(qrCodeDir);
-}
 
 // ✅ Create Payment Link & Generate QR Code
 app.post("/create-payment-link", async (req, res) => {
@@ -50,7 +53,7 @@ app.post("/create-payment-link", async (req, res) => {
             customer: {
                 name: "Customer",
                 email: "customer@example.com",
-                contact: "6384733399",
+                contact: "9999999999",
             },
             notify: {
                 sms: true,
@@ -63,17 +66,19 @@ app.post("/create-payment-link", async (req, res) => {
         console.log("✅ Payment Link Created:", paymentLink.short_url);
 
         // ✅ Generate QR Code for the Payment Link
-        const qrCodeImage = qr.image(paymentLink.short_url, { type: "png" });
-        const qrCodePath = path.join(qrCodeDir, `payment_qr_${Date.now()}.png`);
-        
+        const qrFileName = `payment_qr_${Date.now()}.png`;
+        const qrCodePath = path.join(qrCodeDir, qrFileName);
+        const qrCodeUrl = `https://vend-master.onrender.com/qrcodes/${qrFileName}`; // 🔹 Public URL for Flutter
+
         const qrStream = fs.createWriteStream(qrCodePath);
-        qrCodeImage.pipe(qrStream);
+        qr.image(paymentLink.short_url, { type: "png" }).pipe(qrStream);
 
         qrStream.on("finish", () => {
+            console.log("✅ QR Code Saved:", qrCodeUrl);
             res.json({
                 success: true,
                 paymentLink: paymentLink.short_url,
-                qrCodePath,
+                qrCodeUrl, // ✅ Public URL instead of local path
             });
         });
 
