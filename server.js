@@ -117,10 +117,11 @@ app.post("/verify-payment", async (req, res) => {
             res.status(400).json({ error: "Payment not captured. Please try again." });
         }
     } catch (error) {
-        console.error("❌ Error verifying payment:", error.response?.data || error.message || error);
+        console.error("❌ Error verifying payment:", error);
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
+
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
