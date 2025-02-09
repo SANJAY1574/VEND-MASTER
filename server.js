@@ -52,7 +52,9 @@ app.post("/create-upi-payment", async (req, res) => {
         console.log("✅ Razorpay Order Created:", order);
 
         // ✅ Generate UPI Payment Link using Valid Business UPI ID
-        const upiPaymentUrl = `upi://pay?pa=${process.env.UPI_RECIPIENT_ID}&pn=VendMaster&mc=0000&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR&url=https://vend-master.onrender.com/verify-payment`;
+        // UPI payment URL format:
+        const upiPaymentUrl = `upi://pay?pa=${process.env.UPI_RECIPIENT_ID}&pn=VendMaster&mc=0000&tid=${order.id}&tr=${order.id}&tn=Payment+for+Vending+Machine&am=${amount}&cu=INR`;
+
 
         console.log("✅ UPI Payment Link:", upiPaymentUrl);
 
