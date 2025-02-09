@@ -88,6 +88,7 @@ app.post("/create-upi-payment", async (req, res) => {
 app.use("/qrcodes", express.static(qrCodeDir));
 
 // ✅ Payment Verification Endpoint
+// ✅ Payment Verification Endpoint
 app.post("/verify-payment", async (req, res) => {
     try {
         const { paymentId, orderId, signature } = req.body;
@@ -97,7 +98,11 @@ app.post("/verify-payment", async (req, res) => {
             return res.status(400).json({ error: "Missing required payment details." });
         }
 
+        // Generate Razorpay Signature using orderId and paymentId
         const generatedSignature = razorpay.utils.generateSignature(orderId, paymentId);
+        
+        console.log("Generated Signature:", generatedSignature);
+        console.log("Received Signature:", signature);
 
         // Verify the payment signature
         if (generatedSignature !== signature) {
@@ -117,6 +122,7 @@ app.post("/verify-payment", async (req, res) => {
         res.status(500).json({ error: "Internal Server Error" });
     }
 });
+
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
